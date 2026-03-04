@@ -7,54 +7,65 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f0f0f; --surface: #181818; --surface2: #222222; --border: #2a2a2a;
-    --text: #f0ece4; --muted: #6b6b6b; --accent: #c8a96e; --accent2: #e8d5b0;
-    --green: #4caf7d; --green-dim: rgba(76,175,125,0.12); --red: #e05c5c;
-    --blue: #5b9bd5; --purple: #9b72cf; --card: #1a1a1a;
+    --bg:#0f0f0f; --surface:#181818; --surface2:#222222; --border:#2a2a2a;
+    --text:#f0ece4; --muted:#6b6b6b; --accent:#c8a96e; --accent2:#e8d5b0;
+    --green:#4caf7d; --green-dim:rgba(76,175,125,0.12); --red:#e05c5c;
+    --blue:#5b9bd5; --purple:#9b72cf; --card:#1a1a1a;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
 
-  /* LOGIN */
-  #loginScreen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:600; transition:opacity 0.4s; }
-  .login-box { background:var(--card); border:1px solid var(--border); border-radius:24px; padding:48px 40px; width:400px; max-width:92vw; display:flex; flex-direction:column; align-items:center; }
-  .login-logo { font-family:'Playfair Display',serif; font-size:2.4rem; color:var(--accent); margin-bottom:6px; }
-  .login-sub { font-size:0.85rem; color:var(--muted); margin-bottom:36px; }
-  .login-field { display:flex; flex-direction:column; gap:6px; width:100%; margin-bottom:16px; }
-  .login-field label { font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
-  .login-field input { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:12px 16px; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.95rem; outline:none; transition:border-color 0.2s; width:100%; }
-  .login-field input:focus { border-color:var(--accent); }
-  .login-btn { width:100%; background:var(--accent); color:var(--bg); border:none; padding:13px; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:1rem; font-weight:600; cursor:pointer; transition:all 0.2s; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px; }
-  .login-btn:hover { background:var(--accent2); transform:translateY(-1px); }
-  .login-btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
-  .login-err { color:var(--red); font-size:0.82rem; margin-top:12px; text-align:center; min-height:20px; }
-  .login-lock { font-size:2.5rem; margin-bottom:20px; }
+  /* ── AUTH SCREENS ── */
+  .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:600; transition:opacity 0.3s; }
+  .auth-box { background:var(--card); border:1px solid var(--border); border-radius:24px; padding:44px 40px; width:420px; max-width:93vw; display:flex; flex-direction:column; align-items:center; }
+  .auth-logo { font-family:'Playfair Display',serif; font-size:2.2rem; color:var(--accent); margin-bottom:4px; }
+  .auth-sub { font-size:0.83rem; color:var(--muted); margin-bottom:30px; text-align:center; }
+  .auth-icon { font-size:2.2rem; margin-bottom:16px; }
+  .auth-tabs { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px; gap:3px; width:100%; margin-bottom:28px; }
+  .auth-tab { flex:1; padding:8px; border-radius:8px; border:none; background:transparent; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:0.85rem; font-weight:500; cursor:pointer; transition:all 0.2s; text-align:center; }
+  .auth-tab.active { background:var(--accent); color:var(--bg); font-weight:600; }
 
-  /* LOADING */
+  .auth-field { display:flex; flex-direction:column; gap:6px; width:100%; margin-bottom:14px; }
+  .auth-field label { font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+  .auth-field input { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:12px 16px; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.92rem; outline:none; transition:border-color 0.2s; width:100%; }
+  .auth-field input:focus { border-color:var(--accent); }
+  .auth-btn { width:100%; background:var(--accent); color:var(--bg); border:none; padding:13px; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.95rem; font-weight:600; cursor:pointer; transition:all 0.2s; margin-top:6px; }
+  .auth-btn:hover { background:var(--accent2); transform:translateY(-1px); }
+  .auth-btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+  .auth-err { color:var(--red); font-size:0.82rem; margin-top:10px; text-align:center; min-height:18px; }
+  .auth-ok { color:var(--green); font-size:0.82rem; margin-top:10px; text-align:center; min-height:18px; }
+  .auth-divider { width:100%; border:none; border-top:1px solid var(--border); margin:20px 0; }
+  .forgot-link { font-size:0.8rem; color:var(--muted); cursor:pointer; text-align:center; margin-top:10px; text-decoration:underline; transition:color 0.2s; }
+  .forgot-link:hover { color:var(--accent); }
+
+  /* ── LOADING ── */
   #loadScreen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:500; transition:opacity 0.4s; }
-  #loadScreen .ll { font-family:'Playfair Display',serif; font-size:2.5rem; color:var(--accent); margin-bottom:20px; }
-  #loadScreen .ls { font-size:0.85rem; color:var(--muted); }
+  .load-logo { font-family:'Playfair Display',serif; font-size:2.5rem; color:var(--accent); margin-bottom:20px; }
+  .load-msg { font-size:0.85rem; color:var(--muted); }
   .spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:16px; }
   @keyframes spin { to{transform:rotate(360deg)} }
 
-  /* SYNC */
-  #syncBar { position:fixed; top:0; left:0; right:0; height:3px; background:transparent; z-index:999; transition:background 0.3s; }
+  /* ── SYNC ── */
+  #syncBar { position:fixed; top:0; left:0; right:0; height:3px; z-index:999; transition:background 0.3s; }
   #syncBar.syncing { background:linear-gradient(90deg,var(--accent),var(--green),var(--accent)); background-size:200%; animation:shimmer 1s infinite; }
   #syncBar.error { background:var(--red); }
   @keyframes shimmer { 0%{background-position:0%} 100%{background-position:200%} }
-  #syncStatus { position:fixed; top:12px; right:16px; z-index:998; display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); padding:5px 12px; border-radius:99px; font-size:0.72rem; color:var(--muted); transition:all 0.3s; }
-  #syncStatus .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); transition:background 0.3s; }
+  #syncStatus { position:fixed; top:12px; right:16px; z-index:998; display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); padding:5px 12px; border-radius:99px; font-size:0.72rem; color:var(--muted); }
+  #syncStatus .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); }
   #syncStatus.live .dot { background:var(--green); }
   #syncStatus.live { color:var(--green); border-color:#1a3a2a; }
   #syncStatus.syncing .dot { background:var(--accent); animation:pulse 0.8s infinite; }
   #syncStatus.err .dot { background:var(--red); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  /* HEADER */
+  /* ── HEADER ── */
   header { display:flex; align-items:center; justify-content:space-between; padding:16px 32px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(15,15,15,0.95); backdrop-filter:blur(12px); z-index:100; gap:16px; flex-wrap:wrap; }
   .logo { font-family:'Playfair Display',serif; font-size:1.6rem; color:var(--accent); letter-spacing:-0.5px; }
   .logo span { color:var(--text); }
-  .logout-btn { background:transparent; border:1px solid var(--border); color:var(--muted); padding:7px 16px; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.8rem; cursor:pointer; transition:all 0.2s; }
+  .user-info { display:flex; align-items:center; gap:10px; }
+  .user-avatar { width:32px; height:32px; border-radius:50%; background:var(--accent); color:var(--bg); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0; }
+  .user-email { font-size:0.78rem; color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .logout-btn { background:transparent; border:1px solid var(--border); color:var(--muted); padding:7px 14px; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:0.8rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
   .logout-btn:hover { border-color:var(--red); color:var(--red); }
 
   .tab-switcher { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:4px; gap:4px; }
@@ -73,7 +84,7 @@
   .add-btn.recv { background:var(--green); color:#fff; }
   .add-btn.recv:hover { background:#5fcf96; }
 
-  /* MAIN */
+  /* ── MAIN ── */
   main { max-width:1300px; margin:0 auto; padding:32px 24px; display:grid; grid-template-columns:320px 1fr; gap:28px; }
   .sidebar { display:flex; flex-direction:column; gap:20px; }
   .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; }
@@ -144,7 +155,7 @@
   .empty-state .ei { font-size:3rem; margin-bottom:16px; }
   .empty-state p { font-size:0.9rem; }
 
-  /* MODALS */
+  /* ── MODALS ── */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
   .modal-overlay.open { opacity:1; pointer-events:all; }
   .modal { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:32px; width:500px; max-width:95vw; transform:translateY(20px) scale(0.97); transition:all 0.25s cubic-bezier(0.4,0,0.2,1); max-height:90vh; overflow-y:auto; }
@@ -177,40 +188,56 @@
   .toast.show { transform:translateY(0); opacity:1; }
 
   @media (hover:none) { .row-actions { opacity:1; } }
-  @media (max-width:960px) { main { grid-template-columns:1fr; } header { padding:14px 16px; } }
+  @media (max-width:960px) { main { grid-template-columns:1fr; } header { padding:14px 16px; } .user-email { display:none; } }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="loginScreen">
-  <div class="login-box">
-    <div class="login-lock">🔐</div>
-    <div class="login-logo">Paisa</div>
-    <div class="login-sub">Your personal expense manager</div>
-    <div class="login-field">
-      <label>Email</label>
-      <input type="email" id="loginEmail" placeholder="you@email.com" autocomplete="email">
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-box">
+    <div class="auth-icon">💰</div>
+    <div class="auth-logo">Paisa</div>
+    <div class="auth-sub">Your personal expense manager</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabSignIn" onclick="switchAuthTab('signin')">Sign In</button>
+      <button class="auth-tab" id="tabSignUp" onclick="switchAuthTab('signup')">Create Account</button>
     </div>
-    <div class="login-field">
-      <label>Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+
+    <!-- SIGN IN -->
+    <div id="signInForm" style="width:100%">
+      <div class="auth-field"><label>Email</label><input type="email" id="siEmail" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="siPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doSignIn()"></div>
+      <button class="auth-btn" id="signInBtn" onclick="doSignIn()">🔓 Sign In</button>
+      <div class="forgot-link" onclick="doForgotPassword()">Forgot password?</div>
+      <div class="auth-err" id="siErr"></div>
+      <div class="auth-ok" id="siOk"></div>
     </div>
-    <button class="login-btn" id="loginBtn" onclick="doLogin()">🔓 Sign In</button>
-    <div class="login-err" id="loginErr"></div>
+
+    <!-- SIGN UP -->
+    <div id="signUpForm" style="width:100%;display:none">
+      <div class="auth-field"><label>Full Name</label><input type="text" id="suName" placeholder="Rahul Sharma"></div>
+      <div class="auth-field"><label>Email</label><input type="email" id="suEmail" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="suPass" placeholder="Min. 6 characters" autocomplete="new-password"></div>
+      <div class="auth-field"><label>Confirm Password</label><input type="password" id="suPass2" placeholder="Re-enter password" onkeydown="if(event.key==='Enter')doSignUp()"></div>
+      <button class="auth-btn" id="signUpBtn" onclick="doSignUp()">✨ Create Account</button>
+      <div class="auth-err" id="suErr"></div>
+      <div class="auth-ok" id="suOk"></div>
+    </div>
   </div>
 </div>
 
 <!-- LOADING -->
 <div id="loadScreen" style="display:none">
-  <div class="ll">Paisa</div>
+  <div class="load-logo">Paisa</div>
   <div class="spinner"></div>
-  <div class="ls">Loading your data…</div>
+  <div class="load-msg">Loading your data…</div>
 </div>
 
 <div id="syncBar"></div>
 <div id="syncStatus" style="display:none"><div class="dot"></div><span id="syncText">Connecting…</span></div>
 
+<!-- APP -->
 <header id="appHeader" style="display:none">
   <div class="logo">Paisa <span>—</span></div>
   <div class="tab-switcher">
@@ -223,7 +250,11 @@
     <button onclick="changeMonth(1)">›</button>
   </div>
   <button class="add-btn" id="addBtn" onclick="openModal()">＋ <span id="addLabel">Add Expense</span></button>
-  <button class="logout-btn" onclick="doLogout()">⎋ Sign out</button>
+  <div class="user-info">
+    <div class="user-avatar" id="userAvatar">?</div>
+    <div class="user-email" id="userEmail"></div>
+    <button class="logout-btn" onclick="doLogout()">⎋ Sign out</button>
+  </div>
 </header>
 
 <main id="appMain" style="display:none">
@@ -329,10 +360,35 @@
 
 <div class="toast" id="toastEl"></div>
 
+<!-- Auth tab switcher runs immediately — no Firebase needed -->
+<script>
+  // switchAuthTab is pure DOM, safe to run before module loads
+  window.switchAuthTab = function(t) {
+    document.getElementById('signInForm').style.display  = t==='signin' ? 'block' : 'none';
+    document.getElementById('signUpForm').style.display  = t==='signup' ? 'block' : 'none';
+    document.getElementById('tabSignIn').className = 'auth-tab' + (t==='signin' ? ' active' : '');
+    document.getElementById('tabSignUp').className = 'auth-tab' + (t==='signup' ? ' active' : '');
+    ['siErr','siOk','suErr','suOk'].forEach(id => document.getElementById(id).textContent = '');
+  };
+
+  // Stubs for functions that need Firebase — silently queue until module is ready
+  ['doSignIn','doSignUp','doForgotPassword','doLogout',
+   'switchTab','changeMonth','openModal','closeModal','outerClose','setFilter',
+   'openExpModal','openEditExp','saveExp','delExp',
+   'openRecModal','openEditRec','saveRec','delRec',
+   'renderExpTab','renderRecTab'
+  ].forEach(fn => {
+    window[fn] = function(...args) {
+      if (window['_' + fn]) return window['_' + fn](...args);
+      // module not ready yet — no-op, Firebase loads in < 1s normally
+    };
+  });
+</script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC8kbENBtBUead5RFBtvBG7qXv4qMzeBmo",
@@ -347,63 +403,53 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// ── CATEGORIES (alphabetical, Other always last) ─────────────────
+// ── CATEGORIES ───────────────────────────────────────────────────
 const CATS = {
-  'Clothing':               {c:'#e05c5c', i:'👗'},
-  'Credit Card Bill':       {c:'#5b9bd5', i:'💳'},
-  'Electricity Bill':       {c:'#f5c842', i:'⚡'},
-  'Entertainment':          {c:'#9b72cf', i:'🎬'},
-  'Food':                   {c:'#e8834a', i:'🍽'},
-  'Fuel':                   {c:'#b5651d', i:'⛽'},
-  'Gas / LPG':              {c:'#ff8c42', i:'🔥'},
-  'Grocery':                {c:'#4caf7d', i:'🛒'},
-  'Health & Wellness':      {c:'#e91e8c', i:'💊'},
-  'House Cleaning':         {c:'#26c6da', i:'🧹'},
-  'House EMI':              {c:'#7986cb', i:'🏠'},
-  'Installations':          {c:'#8d6e63', i:'🔧'},
-  'Loan EMI':               {c:'#ef5350', i:'🏦'},
-  'Mobile Recharge / WiFi': {c:'#42a5f5', i:'📱'},
-  'Office Other':           {c:'#c8a96e', i:'🏢'},
-  'Office Supply':          {c:'#ab47bc', i:'📦'},
-  'Office Travel':          {c:'#66bb6a', i:'🚌'},
-  'Personal Care':          {c:'#f48fb1', i:'✂'},
-  'Shopping':               {c:'#e05c5c', i:'🛍'},
-  'Travel':                 {c:'#5b9bd5', i:'✈'},
-  'Vehicle Maintenance':    {c:'#78909c', i:'🚗'},
-  'Other':                  {c:'#6b6b6b', i:'📌'},
+  'Clothing':               {c:'#e05c5c',i:'👗'},
+  'Credit Card Bill':       {c:'#5b9bd5',i:'💳'},
+  'Electricity Bill':       {c:'#f5c842',i:'⚡'},
+  'Entertainment':          {c:'#9b72cf',i:'🎬'},
+  'Food':                   {c:'#e8834a',i:'🍽'},
+  'Fuel':                   {c:'#b5651d',i:'⛽'},
+  'Gas / LPG':              {c:'#ff8c42',i:'🔥'},
+  'Grocery':                {c:'#4caf7d',i:'🛒'},
+  'Health & Wellness':      {c:'#e91e8c',i:'💊'},
+  'House Cleaning':         {c:'#26c6da',i:'🧹'},
+  'House EMI':              {c:'#7986cb',i:'🏠'},
+  'Installations':          {c:'#8d6e63',i:'🔧'},
+  'Loan EMI':               {c:'#ef5350',i:'🏦'},
+  'Mobile Recharge / WiFi': {c:'#42a5f5',i:'📱'},
+  'Office Other':           {c:'#c8a96e',i:'🏢'},
+  'Office Supply':          {c:'#ab47bc',i:'📦'},
+  'Office Travel':          {c:'#66bb6a',i:'🚌'},
+  'Personal Care':          {c:'#f48fb1',i:'✂'},
+  'Shopping':               {c:'#e05c5c',i:'🛍'},
+  'Travel':                 {c:'#5b9bd5',i:'✈'},
+  'Vehicle Maintenance':    {c:'#78909c',i:'🚗'},
+  'Other':                  {c:'#6b6b6b',i:'📌'},
 };
-
-const PAYS = {
-  'Credit Card':{c:'#5b9bd5',i:'💳'},
-  'Cash':        {c:'#4caf7d',i:'💵'},
-  'UPI':         {c:'#9b72cf',i:'📱'},
-};
-const RTYPES = {
-  'Reimbursement':    {c:'#4caf7d',i:'🏢'},
-  'Loan Returned':    {c:'#5b9bd5',i:'🤝'},
-  'Freelance / Work': {c:'#c8a96e',i:'💼'},
-  'Other Income':     {c:'#9b72cf',i:'💰'},
-};
-const RVIAS = {
-  'UPI':           {c:'#9b72cf',i:'📱'},
-  'Bank Transfer': {c:'#5b9bd5',i:'🏦'},
-  'Cash':          {c:'#4caf7d',i:'💵'},
-  'Cheque':        {c:'#c8a96e',i:'📄'},
-  'Credit Card':   {c:'#e05c5c',i:'💳'},
-};
+const PAYS  = {'Credit Card':{c:'#5b9bd5',i:'💳'},'Cash':{c:'#4caf7d',i:'💵'},'UPI':{c:'#9b72cf',i:'📱'}};
+const RTYPES = {'Reimbursement':{c:'#4caf7d',i:'🏢'},'Loan Returned':{c:'#5b9bd5',i:'🤝'},'Freelance / Work':{c:'#c8a96e',i:'💼'},'Other Income':{c:'#9b72cf',i:'💰'}};
+const RVIAS  = {'UPI':{c:'#9b72cf',i:'📱'},'Bank Transfer':{c:'#5b9bd5',i:'🏦'},'Cash':{c:'#4caf7d',i:'💵'},'Cheque':{c:'#c8a96e',i:'📄'},'Credit Card':{c:'#e05c5c',i:'💳'}};
 
 // ── STATE ────────────────────────────────────────────────────────
 let expenses=[], received=[], tab='expenses', filter='all';
 let editEId=null, editRId=null, saving=false;
-let curDate=new Date();
+let curDate=new Date(), currentUser=null;
 let unsubExp=null, unsubRec=null;
 
 // ── UTILS ────────────────────────────────────────────────────────
-const fmt = n=>'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt  = n=>'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const mkey = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-const esc = s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc  = s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const getMonthExp = ()=>expenses.filter(e=>e.date.startsWith(mkey(curDate)));
 const getMonthRec = ()=>received.filter(e=>e.date.startsWith(mkey(curDate)));
+
+// per-user Firestore paths
+const expCol = ()=>collection(db,`users/${currentUser.uid}/expenses`);
+const recCol = ()=>collection(db,`users/${currentUser.uid}/received`);
+const expDoc = id=>doc(db,`users/${currentUser.uid}/expenses/${id}`);
+const recDoc = id=>doc(db,`users/${currentUser.uid}/received/${id}`);
 
 function setSyncStatus(state,text){
   const el=document.getElementById('syncStatus'),bar=document.getElementById('syncBar');
@@ -416,37 +462,86 @@ function toast(msg,color='#4caf7d'){
   t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800);
 }
 
-// ── AUTH ─────────────────────────────────────────────────────────
-onAuthStateChanged(auth, user=>{
-  if(user){
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('loadScreen').style.display='flex';
-    document.getElementById('syncStatus').style.display='flex';
-    startListeners();
-  } else {
-    document.getElementById('loginScreen').style.display='flex';
-    document.getElementById('loadScreen').style.display='none';
-    document.getElementById('appHeader').style.display='none';
-    document.getElementById('appMain').style.display='none';
-    document.getElementById('syncStatus').style.display='none';
-    if(unsubExp)unsubExp(); if(unsubRec)unsubRec();
-  }
-});
+// ── AUTH UI ──────────────────────────────────────────────────────
+// switchAuthTab is defined in the regular script above (no Firebase needed)
 
-window.doLogin=async function(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const pass=document.getElementById('loginPass').value;
-  const btn=document.getElementById('loginBtn'),err=document.getElementById('loginErr');
+window._doSignIn = async function(){
+  const email=document.getElementById('siEmail').value.trim();
+  const pass=document.getElementById('siPass').value;
+  const btn=document.getElementById('signInBtn'),err=document.getElementById('siErr');
   if(!email||!pass){err.textContent='Please enter email and password.';return;}
   btn.textContent='Signing in…'; btn.disabled=true; err.textContent='';
   try{ await signInWithEmailAndPassword(auth,email,pass); }
   catch(e){
-    const msgs={'auth/invalid-credential':'Incorrect email or password.','auth/user-not-found':'No account found.','auth/wrong-password':'Incorrect password.','auth/too-many-requests':'Too many attempts. Try again later.','auth/invalid-email':'Invalid email address.'};
+    const msgs={'auth/invalid-credential':'Incorrect email or password.','auth/user-not-found':'No account found.','auth/wrong-password':'Incorrect password.','auth/too-many-requests':'Too many attempts. Try again later.','auth/invalid-email':'Invalid email.'};
     err.textContent=msgs[e.code]||'Login failed. Please try again.';
     btn.textContent='🔓 Sign In'; btn.disabled=false;
   }
 };
-window.doLogout=async function(){ await signOut(auth); toast('👋 Signed out'); };
+
+window._doSignUp = async function(){
+  const name=document.getElementById('suName').value.trim();
+  const email=document.getElementById('suEmail').value.trim();
+  const pass=document.getElementById('suPass').value;
+  const pass2=document.getElementById('suPass2').value;
+  const btn=document.getElementById('signUpBtn'),err=document.getElementById('suErr'),ok=document.getElementById('suOk');
+  if(!name||!email||!pass){err.textContent='Please fill all fields.';return;}
+  if(pass.length<6){err.textContent='Password must be at least 6 characters.';return;}
+  if(pass!==pass2){err.textContent='Passwords do not match.';return;}
+  btn.textContent='Creating account…'; btn.disabled=true; err.textContent='';
+  try{
+    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    await updateProfile(cred.user,{displayName:name});
+    // save user profile to Firestore
+    await setDoc(doc(db,`users/${cred.user.uid}/profile/info`),{name,email,createdAt:new Date().toISOString()});
+    ok.textContent='Account created! Signing you in…';
+    // onAuthStateChanged will handle the rest
+  }catch(e){
+    const msgs={'auth/email-already-in-use':'An account with this email already exists.','auth/invalid-email':'Invalid email address.','auth/weak-password':'Password is too weak.'};
+    err.textContent=msgs[e.code]||'Sign up failed. Please try again.';
+    btn.textContent='✨ Create Account'; btn.disabled=false;
+  }
+};
+
+window._doForgotPassword = async function(){
+  const email=document.getElementById('siEmail').value.trim();
+  const err=document.getElementById('siErr'),ok=document.getElementById('siOk');
+  if(!email){err.textContent='Enter your email above first.';return;}
+  try{
+    await sendPasswordResetEmail(auth,email);
+    ok.textContent='✓ Password reset email sent! Check your inbox.';
+    err.textContent='';
+  }catch(e){ err.textContent='Could not send reset email. Check the address.'; }
+};
+
+window._doLogout = async function(){ await signOut(auth); toast('👋 Signed out'); };
+
+// ── AUTH STATE ───────────────────────────────────────────────────
+onAuthStateChanged(auth, user=>{
+  if(user){
+    currentUser=user;
+    document.getElementById('authScreen').style.display='none';
+    document.getElementById('loadScreen').style.display='flex';
+    document.getElementById('syncStatus').style.display='flex';
+    // set avatar & email in header
+    const name=user.displayName||user.email;
+    document.getElementById('userAvatar').textContent=(name[0]||'?').toUpperCase();
+    document.getElementById('userEmail').textContent=user.email;
+    startListeners();
+  } else {
+    currentUser=null;
+    document.getElementById('authScreen').style.display='flex';
+    document.getElementById('loadScreen').style.display='none';
+    document.getElementById('appHeader').style.display='none';
+    document.getElementById('appMain').style.display='none';
+    document.getElementById('syncStatus').style.display='none';
+    // reset sign-in button
+    document.getElementById('signInBtn').textContent='🔓 Sign In';
+    document.getElementById('signInBtn').disabled=false;
+    if(unsubExp)unsubExp(); if(unsubRec)unsubRec();
+    expenses=[]; received=[];
+  }
+});
 
 // ── LISTENERS ────────────────────────────────────────────────────
 let loadedExp=false, loadedRec=false;
@@ -461,19 +556,19 @@ function checkLoaded(){
 }
 function startListeners(){
   loadedExp=false; loadedRec=false;
-  unsubExp=onSnapshot(query(collection(db,'expenses'),orderBy('date','desc')),snap=>{
+  unsubExp=onSnapshot(query(expCol(),orderBy('date','desc')),snap=>{
     expenses=snap.docs.map(d=>({id:d.id,...d.data()}));
     loadedExp=true; checkLoaded(); if(loadedRec)renderAll();
-  },err=>{setSyncStatus('err','Sync error');document.getElementById('loadScreen').style.display='none';});
-  unsubRec=onSnapshot(query(collection(db,'received'),orderBy('date','desc')),snap=>{
+  },()=>{setSyncStatus('err','Sync error');document.getElementById('loadScreen').style.display='none';});
+  unsubRec=onSnapshot(query(recCol(),orderBy('date','desc')),snap=>{
     received=snap.docs.map(d=>({id:d.id,...d.data()}));
     loadedRec=true; checkLoaded(); if(loadedExp)renderAll();
-  },err=>{setSyncStatus('err','Sync error');document.getElementById('loadScreen').style.display='none';});
+  },()=>{setSyncStatus('err','Sync error');document.getElementById('loadScreen').style.display='none';});
 }
 
 // ── NAV ──────────────────────────────────────────────────────────
-window.changeMonth=d=>{curDate.setMonth(curDate.getMonth()+d);renderAll();};
-window.switchTab=t=>{
+window._changeMonth=d=>{curDate.setMonth(curDate.getMonth()+d);renderAll();};
+window._switchTab=t=>{
   tab=t; filter='all';
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelector('.tab-btn.'+t).classList.add('active');
@@ -482,76 +577,76 @@ window.switchTab=t=>{
   document.getElementById('addLabel').textContent=t==='received'?'Add Received':'Add Expense';
   renderAll();
 };
-window.openModal=()=>tab==='expenses'?openExpModal(true):openRecModal(true);
-window.closeModal=oid=>document.getElementById(oid).classList.remove('open');
-window.outerClose=(e,oid)=>{if(e.target===document.getElementById(oid))window.closeModal(oid);};
-window.setFilter=f=>{filter=f;tab==='expenses'?renderExpTab():renderRecTab();};
+window._openModal=()=>tab==='expenses'?openExpModal(true):openRecModal(true);
+window._closeModal=oid=>document.getElementById(oid).classList.remove('open');
+window._outerClose=(e,oid)=>{if(e.target===document.getElementById(oid))window._closeModal(oid);};
+window._setFilter=f=>{filter=f;tab==='expenses'?renderExpTab():renderRecTab();};
 
 // ── EXPENSE CRUD ─────────────────────────────────────────────────
-window.openExpModal=function(reset){
+window._openExpModal=function(reset){
   editEId=null;
   if(reset){document.getElementById('expTitle').textContent='Add Expense';document.getElementById('fDesc').value='';document.getElementById('fAmt').value='';document.getElementById('fDate').value=new Date().toISOString().split('T')[0];document.getElementById('fCat').value='Food';document.getElementById('fPay').value='UPI';document.getElementById('fNotes').value='';}
   document.getElementById('expOverlay').classList.add('open');
 };
-window.openEditExp=function(id){
+window._openEditExp=function(id){
   const e=expenses.find(x=>x.id===id);if(!e)return;
-  editEId=id; document.getElementById('expTitle').textContent='Edit Expense';
-  document.getElementById('fDesc').value=e.desc; document.getElementById('fAmt').value=e.amount;
-  document.getElementById('fDate').value=e.date; document.getElementById('fCat').value=e.category;
-  document.getElementById('fPay').value=e.payment; document.getElementById('fNotes').value=e.notes||'';
+  editEId=id;document.getElementById('expTitle').textContent='Edit Expense';
+  document.getElementById('fDesc').value=e.desc;document.getElementById('fAmt').value=e.amount;
+  document.getElementById('fDate').value=e.date;document.getElementById('fCat').value=e.category;
+  document.getElementById('fPay').value=e.payment;document.getElementById('fNotes').value=e.notes||'';
   document.getElementById('expOverlay').classList.add('open');
 };
-window.saveExp=async function(){
+window._saveExp=async function(){
   if(saving)return;
   const desc=document.getElementById('fDesc').value.trim(),amount=parseFloat(document.getElementById('fAmt').value),date=document.getElementById('fDate').value,category=document.getElementById('fCat').value,payment=document.getElementById('fPay').value,notes=document.getElementById('fNotes').value.trim();
   if(!desc||!amount||!date||isNaN(amount)||amount<=0){toast('⚠ Fill all required fields.','#e05c5c');return;}
   const btn=document.getElementById('expSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
   try{
     const data={desc,amount,date,category,payment,notes};
-    if(editEId){await updateDoc(doc(db,'expenses',editEId),data);toast('✓ Expense updated');}
-    else{await addDoc(collection(db,'expenses'),data);toast('✓ Expense added');}
-    window.closeModal('expOverlay');
+    if(editEId){await updateDoc(expDoc(editEId),data);toast('✓ Expense updated');}
+    else{await addDoc(expCol(),data);toast('✓ Expense added');}
+    window._closeModal('expOverlay');
   }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');}
   btn.textContent='Save Expense';btn.disabled=false;saving=false;
 };
-window.delExp=async function(id){
+window._delExp=async function(id){
   setSyncStatus('syncing','Deleting…');
-  try{await deleteDoc(doc(db,'expenses',id));toast('🗑 Expense deleted');}
-  catch(err){toast('❌ Delete failed','#e05c5c');}
+  try{await deleteDoc(expDoc(id));toast('🗑 Expense deleted');}
+  catch(e){toast('❌ Delete failed','#e05c5c');}
 };
 
 // ── RECEIVED CRUD ────────────────────────────────────────────────
-window.openRecModal=function(reset){
+window._openRecModal=function(reset){
   editRId=null;
   if(reset){document.getElementById('recTitle').textContent='Add Received Payment';['rDesc','rFrom','rNotes'].forEach(id=>document.getElementById(id).value='');document.getElementById('rAmt').value='';document.getElementById('rDate').value=new Date().toISOString().split('T')[0];document.getElementById('rType').value='Reimbursement';document.getElementById('rVia').value='UPI';}
   document.getElementById('recOverlay').classList.add('open');
 };
-window.openEditRec=function(id){
+window._openEditRec=function(id){
   const e=received.find(x=>x.id===id);if(!e)return;
-  editRId=id; document.getElementById('recTitle').textContent='Edit Received Payment';
-  document.getElementById('rDesc').value=e.desc; document.getElementById('rFrom').value=e.from||'';
-  document.getElementById('rAmt').value=e.amount; document.getElementById('rDate').value=e.date;
-  document.getElementById('rType').value=e.type; document.getElementById('rVia').value=e.via;
+  editRId=id;document.getElementById('recTitle').textContent='Edit Received Payment';
+  document.getElementById('rDesc').value=e.desc;document.getElementById('rFrom').value=e.from||'';
+  document.getElementById('rAmt').value=e.amount;document.getElementById('rDate').value=e.date;
+  document.getElementById('rType').value=e.type;document.getElementById('rVia').value=e.via;
   document.getElementById('rNotes').value=e.notes||'';
   document.getElementById('recOverlay').classList.add('open');
 };
-window.saveRec=async function(){
+window._saveRec=async function(){
   if(saving)return;
   const desc=document.getElementById('rDesc').value.trim(),from=document.getElementById('rFrom').value.trim(),amount=parseFloat(document.getElementById('rAmt').value),date=document.getElementById('rDate').value,type=document.getElementById('rType').value,via=document.getElementById('rVia').value,notes=document.getElementById('rNotes').value.trim();
   if(!desc||!amount||!date||isNaN(amount)||amount<=0){toast('⚠ Fill all required fields.','#e05c5c');return;}
   const btn=document.getElementById('recSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
   try{
     const data={desc,from,amount,date,type,via,notes};
-    if(editRId){await updateDoc(doc(db,'received',editRId),data);toast('✓ Payment updated','#4caf7d');}
-    else{await addDoc(collection(db,'received'),data);toast('✓ Payment recorded','#4caf7d');}
-    window.closeModal('recOverlay');
+    if(editRId){await updateDoc(recDoc(editRId),data);toast('✓ Payment updated','#4caf7d');}
+    else{await addDoc(recCol(),data);toast('✓ Payment recorded','#4caf7d');}
+    window._closeModal('recOverlay');
   }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');}
   btn.textContent='Save Payment';btn.disabled=false;saving=false;
 };
-window.delRec=async function(id){
+window._delRec=async function(id){
   setSyncStatus('syncing','Deleting…');
-  try{await deleteDoc(doc(db,'received',id));toast('🗑 Entry deleted');}
-  catch(err){toast('❌ Delete failed','#e05c5c');}
+  try{await deleteDoc(recDoc(id));toast('🗑 Entry deleted');}
+  catch(e){toast('❌ Delete failed','#e05c5c');}
 };
 
 // ── RENDER ───────────────────────────────────────────────────────
@@ -560,7 +655,6 @@ function renderAll(){
   document.getElementById('currentMonth').textContent=M[curDate.getMonth()]+' '+curDate.getFullYear();
   renderSidebar(); tab==='expenses'?renderExpTab():renderRecTab();
 }
-
 function renderSidebar(){
   const ed=getMonthExp(),rd=getMonthRec();
   const spent=ed.reduce((s,e)=>s+Number(e.amount),0),recvd=rd.reduce((s,e)=>s+Number(e.amount),0),net=recvd-spent;
@@ -571,14 +665,12 @@ function renderSidebar(){
   document.getElementById('netAmt').textContent=fmt(Math.abs(net));
   document.getElementById('netAmt').style.color=net>=0?'var(--green)':'var(--red)';
   document.getElementById('netLabel').textContent=net>=0?'surplus this month':'deficit this month';
-
   if(tab==='expenses'){
     document.getElementById('sPayTitle').textContent='By Payment Method';
     const pt={};ed.forEach(e=>{pt[e.payment]=(pt[e.payment]||0)+Number(e.amount);});
     document.getElementById('payBreakdown').innerHTML=Object.entries(PAYS).map(([n,p])=>`<div class="pay-row"><div class="pay-badge"><div class="pay-dot" style="background:${p.c}"></div>${n}</div><div class="pay-amount">${fmt(pt[n]||0)}</div></div>`).join('');
     document.getElementById('sCatTitle').textContent='By Category';
     const ct={};ed.forEach(e=>{ct[e.category]=(ct[e.category]||0)+Number(e.amount);});
-    // only show categories that have spend, sorted by amount desc
     const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]);
     const mx=sorted[0]?sorted[0][1]:1;
     document.getElementById('catBreakdown').innerHTML=sorted.length?sorted.map(([n,a])=>{const c=CATS[n]||CATS['Other'];return`<div class="cat-bar-wrap"><div class="cat-bar-header"><span class="cat-bar-name">${c.i} ${n}</span><span class="cat-bar-amount">${fmt(a)}</span></div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(a/mx*100).toFixed(1)}%;background:${c.c}"></div></div></div>`;}).join(''):'<div style="color:var(--muted);font-size:0.85rem">No expenses this month.</div>';
@@ -592,12 +684,10 @@ function renderSidebar(){
     document.getElementById('catBreakdown').innerHTML=Object.entries(RTYPES).map(([n,c])=>{const a=tt[n]||0;return`<div class="cat-bar-wrap"><div class="cat-bar-header"><span class="cat-bar-name">${c.i} ${n}</span><span class="cat-bar-amount">${fmt(a)}</span></div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(a/mx*100).toFixed(1)}%;background:${c.c}"></div></div></div>`;}).join('');
   }
 }
-
 function buildFilters(btns){
   return btns.map(b=>`<button class="filter-btn ${filter===b.v?'active'+(b.g?' ga':''):''}" onclick="setFilter('${b.v}')">${b.l}</button>`).join('')+
   `<div class="search-box"><input type="text" id="si" placeholder="Search…" oninput="tab==='expenses'?renderExpTab():renderRecTab()" value="${esc(document.getElementById('si')?.value||'')}"></div>`;
 }
-
 function renderExpTab(){
   document.getElementById('filtersBar').innerHTML=buildFilters([{v:'all',l:'All'},{v:'Credit Card',l:'💳 Card'},{v:'Cash',l:'💵 Cash'},{v:'UPI',l:'📱 UPI'}]);
   document.getElementById('tHead').innerHTML='<tr><th>Description</th><th>Category</th><th>Payment</th><th>Date</th><th style="text-align:right">Amount</th><th></th></tr>';
@@ -608,13 +698,8 @@ function renderExpTab(){
   data.sort((a,b)=>b.date.localeCompare(a.date));
   const body=document.getElementById('tBody');
   if(!data.length){body.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="ei">🧾</div><p>No expenses found for this period.</p></div></td></tr>`;return;}
-  body.innerHTML=data.map(e=>{
-    const cat=CATS[e.category]||CATS['Other'],pay=PAYS[e.payment]||PAYS['UPI'];
-    const ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
-    return`<tr><td><div class="exp-desc">${esc(e.desc)}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="cat-chip"><span class="cat-dot" style="background:${cat.c}"></span>${e.category}</span></td><td><span class="pay-chip" style="background:${pay.c}22;color:${pay.c}">${pay.i} ${e.payment}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-red">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditExp('${e.id}')">✏</button><button class="del-btn" onclick="delExp('${e.id}')">✕</button></div></td></tr>`;
-  }).join('');
+  body.innerHTML=data.map(e=>{const cat=CATS[e.category]||CATS['Other'],pay=PAYS[e.payment]||PAYS['UPI'],ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});return`<tr><td><div class="exp-desc">${esc(e.desc)}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="cat-chip"><span class="cat-dot" style="background:${cat.c}"></span>${e.category}</span></td><td><span class="pay-chip" style="background:${pay.c}22;color:${pay.c}">${pay.i} ${e.payment}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-red">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditExp('${e.id}')">✏</button><button class="del-btn" onclick="delExp('${e.id}')">✕</button></div></td></tr>`;}).join('');
 }
-
 function renderRecTab(){
   document.getElementById('filtersBar').innerHTML=buildFilters([{v:'all',l:'All',g:true},{v:'Reimbursement',l:'🏢 Reimb.',g:true},{v:'Loan Returned',l:'🤝 Loan',g:true},{v:'Freelance / Work',l:'💼 Freelance',g:true},{v:'Other Income',l:'💰 Other',g:true}]);
   document.getElementById('tHead').innerHTML='<tr><th>Description</th><th>From</th><th>Type</th><th>Via</th><th>Date</th><th style="text-align:right">Amount</th><th></th></tr>';
@@ -625,15 +710,10 @@ function renderRecTab(){
   data.sort((a,b)=>b.date.localeCompare(a.date));
   const body=document.getElementById('tBody');
   if(!data.length){body.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="ei">💸</div><p>No received payments found.</p></div></td></tr>`;return;}
-  body.innerHTML=data.map(e=>{
-    const rt=RTYPES[e.type]||RTYPES['Other Income'],rv=RVIAS[e.via]||RVIAS['UPI'];
-    const ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
-    return`<tr><td><div class="exp-desc">${esc(e.desc)}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="from-chip">👤 ${esc(e.from||'—')}</span></td><td><span class="cat-chip"><span class="cat-dot" style="background:${rt.c}"></span>${e.type}</span></td><td><span class="pay-chip" style="background:${rv.c}22;color:${rv.c}">${rv.i} ${e.via}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-grn">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditRec('${e.id}')">✏</button><button class="del-btn" onclick="delRec('${e.id}')">✕</button></div></td></tr>`;
-  }).join('');
+  body.innerHTML=data.map(e=>{const rt=RTYPES[e.type]||RTYPES['Other Income'],rv=RVIAS[e.via]||RVIAS['UPI'],ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});return`<tr><td><div class="exp-desc">${esc(e.desc)}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="from-chip">👤 ${esc(e.from||'—')}</span></td><td><span class="cat-chip"><span class="cat-dot" style="background:${rt.c}"></span>${e.type}</span></td><td><span class="pay-chip" style="background:${rv.c}22;color:${rv.c}">${rv.i} ${e.via}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-grn">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditRec('${e.id}')">✏</button><button class="del-btn" onclick="delRec('${e.id}')">✕</button></div></td></tr>`;}).join('');
 }
-
-window.renderExpTab=renderExpTab;
-window.renderRecTab=renderRecTab;
+window._renderExpTab=renderExpTab;
+window._renderRecTab=renderRecTab;
 </script>
 </body>
 </html>
