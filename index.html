@@ -231,7 +231,7 @@
 <div id="loadScreen" style="display:none">
   <div class="load-logo">Paisa</div>
   <div class="spinner"></div>
-  <div class="load-msg">Loading your data…</div>
+  <div class="load-msg" id="loadMsg">Loading your data…</div>
 </div>
 
 <div id="syncBar"></div>
@@ -522,12 +522,13 @@ onAuthStateChanged(auth, user=>{
     currentUser=user;
     document.getElementById('authScreen').style.display='none';
     document.getElementById('loadScreen').style.display='flex';
+    document.getElementById('loadMsg') && (document.getElementById('loadMsg').textContent='Loading your data…');
     document.getElementById('syncStatus').style.display='flex';
-    // set avatar & email in header
     const name=user.displayName||user.email;
     document.getElementById('userAvatar').textContent=(name[0]||'?').toUpperCase();
     document.getElementById('userEmail').textContent=user.email;
-    startListeners();
+    // migrate old data first, then start listeners
+    migrateOldData().then(()=>startListeners());
   } else {
     currentUser=null;
     document.getElementById('authScreen').style.display='flex';
@@ -535,13 +536,62 @@ onAuthStateChanged(auth, user=>{
     document.getElementById('appHeader').style.display='none';
     document.getElementById('appMain').style.display='none';
     document.getElementById('syncStatus').style.display='none';
-    // reset sign-in button
     document.getElementById('signInBtn').textContent='🔓 Sign In';
     document.getElementById('signInBtn').disabled=false;
     if(unsubExp)unsubExp(); if(unsubRec)unsubRec();
     expenses=[]; received=[];
   }
 });
+
+// ── ONE-TIME MIGRATION ───────────────────────────────────────────
+// Moves old top-level /expenses and /received docs into /users/{uid}/expenses|received
+// Marks each doc with _migrated:true so it only runs once per doc
+async function migrateOldData(){
+  const loadMsg = document.getElementById('loadMsg');
+  try {
+    const { getDocs, writeBatch, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+
+    const [oldExpSnap, oldRecSnap] = await Promise.all([
+      getDocs(collection(db,'expenses')),
+      getDocs(collection(db,'received')),
+    ]);
+
+    // filter only docs not yet migrated
+    const expToMigrate = oldExpSnap.docs.filter(d=>!d.data()._migrated);
+    const recToMigrate = oldRecSnap.docs.filter(d=>!d.data()._migrated);
+
+    if(expToMigrate.length===0 && recToMigrate.length===0) return; // nothing to do
+
+    if(loadMsg) loadMsg.textContent=`Migrating ${expToMigrate.length+recToMigrate.length} old records…`;
+
+    // Firestore batch allows up to 500 writes at once
+    const batch = writeBatch(db);
+
+    expToMigrate.forEach(d=>{
+      const data = d.data();
+      delete data._migrated;
+      // write to new user path
+      const newRef = doc(collection(db,`users/${currentUser.uid}/expenses`));
+      batch.set(newRef, data);
+      // mark old doc as migrated so we don't re-migrate
+      batch.update(doc(db,'expenses',d.id),{_migrated:true});
+    });
+
+    recToMigrate.forEach(d=>{
+      const data = d.data();
+      delete data._migrated;
+      const newRef = doc(collection(db,`users/${currentUser.uid}/received`));
+      batch.set(newRef, data);
+      batch.update(doc(db,'received',d.id),{_migrated:true});
+    });
+
+    await batch.commit();
+    if(loadMsg) loadMsg.textContent='Migration complete! Loading your data…';
+  } catch(e){
+    // migration failed silently — app still works, user can retry by reloading
+    console.error('Migration error:',e);
+  }
+}
 
 // ── LISTENERS ────────────────────────────────────────────────────
 let loadedExp=false, loadedRec=false;
