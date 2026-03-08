@@ -669,8 +669,9 @@ function computeBalances(){
   const bal={};
   people.forEach(p=>bal[p.id]=0);
   splits.forEach(s=>{
-    if(!s.settled){
-      if(bal[s.personId]!==undefined) bal[s.personId]+=Number(s.amount); // positive = they owe me
+    if(!s.settled&&s.personId){
+      if(bal[s.personId]===undefined) bal[s.personId]=0;
+      bal[s.personId]+=Number(s.amount);
     }
   });
   return bal;
@@ -851,18 +852,15 @@ function renderPersonHistory(personId){
 }
 
 // ── SPLIT UI ─────────────────────────────────────────────────────
-// Use index-based IDs to avoid special chars in Firestore IDs breaking querySelector
-function splitCheckId(idx){return'sc_'+idx;}
-function splitAmtId(idx){return'sa_'+idx;}
+// renderedPeople is a snapshot taken at render time so index-based IDs stay stable
+let renderedPeople=[];
 
 window._toggleSplit=function(){
-  // Called only from the div wrapper — manually toggle the checkbox
   const cb=document.getElementById('splitCheck');
   cb.checked=!cb.checked;
   document.getElementById('splitSection').className='split-section'+(cb.checked?' open':'');
   if(cb.checked)renderSplitPeople();
 };
-// Called when the checkbox itself is clicked directly (not via the div)
 window._splitCheckDirect=function(){
   const cb=document.getElementById('splitCheck');
   document.getElementById('splitSection').className='split-section'+(cb.checked?' open':'');
@@ -871,15 +869,21 @@ window._splitCheckDirect=function(){
 window._onAmtChange=function(){if(document.getElementById('splitCheck').checked)updateSplitRemaining();};
 
 function renderSplitPeople(){
-  if(!people.length){document.getElementById('splitPeopleList').innerHTML='<div style="color:var(--muted);font-size:.83rem">No people added yet. Go to 👥 People tab first.</div>';return;}
-  document.getElementById('splitPeopleList').innerHTML=people.map((p,idx)=>`
+  if(!people.length){
+    document.getElementById('splitPeopleList').innerHTML='<div style="color:var(--muted);font-size:.83rem">No people added yet. Go to \u{1F465} People tab first.</div>';
+    renderedPeople=[];return;
+  }
+  renderedPeople=[...people];
+  document.getElementById('splitPeopleList').innerHTML=renderedPeople.map((p,idx)=>`
     <div class="split-person-row">
-      <input type="checkbox" class="split-check" id="${splitCheckId(idx)}" onchange="updateSplitRemaining()">
+      <input type="checkbox" class="split-check" id="sc_${idx}" onchange="updateSplitRemaining()">
       <div class="split-avatar" style="background:${personColor(p.id)}">${(p.name[0]||'?').toUpperCase()}</div>
       <div class="split-name">${esc(p.name)}</div>
       <div style="position:relative;flex-shrink:0">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:600;pointer-events:none;font-size:.85rem">₹</span>
-        <input type="number" id="${splitAmtId(idx)}" placeholder="0" min="0" step="0.01" style="padding-left:26px;width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;" oninput="updateSplitRemaining()">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:600;pointer-events:none;font-size:.85rem">\u20B9</span>
+        <input type="number" id="sa_${idx}" placeholder="0" min="0" step="0.01"
+          style="padding-left:26px;width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;padding-top:10px;padding-bottom:10px;"
+          oninput="updateSplitRemaining()">
       </div>
     </div>`).join('');
   updateSplitRemaining();
@@ -887,23 +891,37 @@ function renderSplitPeople(){
 function updateSplitRemaining(){
   const total=parseFloat(document.getElementById('fAmt').value)||0;
   let allocated=0;
-  people.forEach((_,idx)=>{if(document.getElementById(splitCheckId(idx))?.checked)allocated+=parseFloat(document.getElementById(splitAmtId(idx))?.value||0)||0;});
+  renderedPeople.forEach((_,idx)=>{
+    if(document.getElementById('sc_'+idx)?.checked)
+      allocated+=parseFloat(document.getElementById('sa_'+idx)?.value||0)||0;
+  });
   const rem=total-allocated;
   const el=document.getElementById('splitRemaining');
   if(!el)return;
   el.className='split-remaining '+(Math.abs(rem)<0.01?'ok':rem<0?'over':'');
-  el.textContent=Math.abs(rem)<0.01?`✓ Fully allocated (₹${total.toFixed(2)})`:rem>0?`₹${rem.toFixed(2)} remaining (your share)`:`⚠ Over-allocated by ₹${Math.abs(rem).toFixed(2)}`;
+  el.textContent=Math.abs(rem)<0.01
+    ?`\u2713 Fully allocated (\u20B9${total.toFixed(2)})`
+    :rem>0?`\u20B9${rem.toFixed(2)} remaining (your share)`
+    :`\u26A0 Over-allocated by \u20B9${Math.abs(rem).toFixed(2)}`;
 }
 window._updateSplitRemaining=updateSplitRemaining;
 window.updateSplitRemaining=updateSplitRemaining;
 
 function getSplitData(){
-  if(!document.getElementById('splitCheck')?.checked)return[];
-  return people.map((p,idx)=>({
-    personId:p.id,
-    amount:parseFloat(document.getElementById(splitAmtId(idx))?.value||0)||0,
-    checked:!!document.getElementById(splitCheckId(idx))?.checked
-  })).filter(s=>s.checked&&s.amount>0);
+  const cb=document.getElementById('splitCheck');
+  if(!cb||!cb.checked){console.log('[Paisa] split not checked');return[];}
+  const result=[];
+  renderedPeople.forEach((p,idx)=>{
+    const chk=document.getElementById('sc_'+idx);
+    const amtEl=document.getElementById('sa_'+idx);
+    const amt=parseFloat(amtEl?.value||0)||0;
+    console.log('[Paisa] person idx='+idx+' name='+p.name+' id='+p.id+' checked='+(chk&&chk.checked)+' amt='+amt);
+    if(chk&&chk.checked&&amt>0){
+      result.push({personId:p.id,amount:amt});
+    }
+  });
+  console.log('[Paisa] getSplitData =>',JSON.stringify(result));
+  return result;
 }
 
 // ── EXPENSE CRUD ─────────────────────────────────────────────────
@@ -943,27 +961,38 @@ window._saveExp=async function(){
   if(saving)return;
   const desc=document.getElementById('fDesc').value.trim(),amount=parseFloat(document.getElementById('fAmt').value),date=document.getElementById('fDate').value,category=document.getElementById('fCat').value,payment=document.getElementById('fPay').value,notes=document.getElementById('fNotes').value.trim();
   if(!desc||!amount||!date||isNaN(amount)||amount<=0){toast('⚠ Fill all required fields.','#e05c5c');return;}
+  console.log('[Paisa] saveExp called, renderedPeople=',renderedPeople.map(p=>p.name), 'splitCheck=',document.getElementById('splitCheck')?.checked);
   const splitData=getSplitData();
+  console.log('[Paisa] splitData=',splitData);
   const splitTotal=splitData.reduce((s,x)=>s+x.amount,0);
   if(splitData.length&&splitTotal>amount+0.01){toast('⚠ Split amounts exceed total expense.','#e05c5c');return;}
   const btn=document.getElementById('expSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
   try{
     const data={desc,amount,date,category,payment,notes,hasSplit:splitData.length>0};
     let expId;
-    if(editEId){await updateDoc(expDocR(editEId),data);expId=editEId;toast('✓ Expense updated');}
-    else{const ref=await addDoc(expCol(),data);expId=ref.id;toast('✓ Expense added');}
-    // save splits
+    if(editEId){
+      await updateDoc(expDocR(editEId),data);
+      expId=editEId;
+    } else {
+      const ref=await addDoc(expCol(),data);
+      expId=ref.id;
+    }
+    // save splits — always write AFTER expense is saved
     if(!editEId&&splitData.length){
       const batch=writeBatch(db);
       splitData.forEach(s=>{
-        const ref=doc(splitsCol());
-        batch.set(ref,{personId:s.personId,amount:s.amount,desc,date,expenseId:expId,type:'split',settled:false,createdAt:new Date().toISOString()});
+        const newRef=doc(collection(db,`users/${currentUser.uid}/splits`));
+        batch.set(newRef,{personId:s.personId,amount:Number(s.amount),desc,date,expenseId:expId,type:'split',settled:false,createdAt:new Date().toISOString()});
       });
       await batch.commit();
-      toast(`✓ Expense saved & split with ${splitData.length} person${splitData.length>1?'s':''}!`,'#9b72cf');
+      toast(`✓ Split saved! ${splitData.length} person${splitData.length>1?'s':''}  owe${splitData.length>1?'':'s'} you`,'#9b72cf');
+    } else if(!editEId){
+      toast('✓ Expense added');
+    } else {
+      toast('✓ Expense updated');
     }
     window._closeModal('expOverlay');
-  }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');}
+  }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');console.error('saveExp error:',err);}
   btn.textContent='Save Expense';btn.disabled=false;saving=false;
 };
 window._delExp=async function(id){
