@@ -685,9 +685,9 @@ textarea{resize:vertical;min-height:65px;}
 
       <!-- Password field (hidden until needed) -->
       <div id="pdfPasswordWrap" style="display:none;margin-top:16px">
-        <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:6px">🔒 PDF Password <span style="opacity:.6">(usually your DOB: DDMMYYYY)</span></label>
+        <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:6px">🔒 PDF Password <span style="opacity:.6">(Kotak: usually your CRN number)</span></label>
         <div style="display:flex;gap:10px">
-          <input type="password" id="pdfPassword" placeholder="e.g. 15081990" style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
+          <input type="password" id="pdfPassword" placeholder="e.g. your CRN number" style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
           <button class="btn-save" onclick="retryWithPassword()">Unlock & Parse</button>
         </div>
       </div>
@@ -1894,8 +1894,16 @@ async function processPdf(file,password){
       toast('⚠ Could not extract text. The PDF may be scanned/image-based.','#e05c5c');
       setImpStep(1);return;
     }
-    document.getElementById('parseMsg').textContent='Parsing transactions with AI…';
-    await parseWithClaude(fullText);
+    document.getElementById('parseMsg').textContent='Parsing transactions…';
+    const parsed = parseStatement(fullText);
+    if(!parsed.length){
+      toast('⚠ No debit transactions found. Check the PDF is a Kotak statement.','#f59e0b');
+      setImpStep(1);return;
+    }
+    importedRows=parsed.map((r,i)=>({...r,_id:i,_include:true,_dup:false,_tags:[...activeTagFilters]}));
+    checkDuplicates();
+    buildReviewTable();
+    setImpStep(3);
   }catch(err){
     if(err.name==='PasswordException'||err.message?.includes('password')){
       setImpStep(1);
@@ -1909,67 +1917,170 @@ async function processPdf(file,password){
   }
 }
 
-async function parseWithClaude(rawText){
-  const prompt=`You are a bank statement parser for Indian bank statements.
+function parseKotakStatement(rawText){
+  // ── Kotak PDF text parser ─────────────────────────────────────
+  // Kotak statement lines look like (after PDF text extraction):
+  //   03-03-2026 UPI-ZOMATO-9876543210 123456789 450.00 12,550.00
+  // or split across two lines when narration is long.
+  // Strategy: scan line by line, detect date-starting rows, accumulate
+  // narration, then find amounts using the last two numbers on the row
+  // (withdrawal, balance) vs three numbers (withdrawal, deposit, balance).
 
-Below is raw text extracted from a Kotak Bank account statement PDF.
+  const lines = rawText.split('
+').map(l=>l.trim()).filter(Boolean);
+  const transactions = [];
 
-Extract ALL debit/withdrawal transactions and return ONLY a valid JSON array. No explanation, no markdown, no code fences — just the raw JSON array.
+  // Date pattern DD-MM-YYYY or DD/MM/YYYY
+  const DATE_RE = /^(\d{2}[-\/]\d{2}[-\/]\d{4})/;
+  // Amount pattern — number with optional commas and decimals
+  const AMT_RE = /[\d,]+\.\d{2}/g;
 
-Each object must have exactly these fields:
-- "date": "YYYY-MM-DD" format
-- "description": clean readable merchant/purpose name (e.g. "Zomato" not "UPI-ZOMATO-9876543210-FDORD")
-- "amount": number without commas (e.g. 450.00)
-- "type": "debit"
-- "paymentMethod": one of "UPI", "Credit Card", "Cash" — infer from description (UPI/BHIM/IMPS→UPI, ATM WDL/CASH→Cash, otherwise→UPI)
-- "category": best guess from: Food, Fuel, Grocery, Shopping, Travel, Entertainment, Health & Wellness, Mobile Recharge/WiFi, Electricity Bill, House EMI, Loan EMI, Credit Card Bill, Office Travel, Personal Care, Other
-- "raw": original narration string from statement
+  // Skip header/footer keywords
+  const SKIP = /opening balance|closing balance|statement of account|account no|branch|ifsc|nominee|page|sr\.?\s*no|date\s+narration|cheque|balance b\/f|balance c\/f|^s\.no/i;
 
-Rules:
-- ONLY include debits/withdrawals (money leaving account)
-- Skip: opening balance, closing balance, header rows, credits/deposits, interest
-- If year is ambiguous use current year
-- Return [] if no debit transactions found
+  let i = 0;
+  while(i < lines.length){
+    const line = lines[i];
+    const dateMatch = line.match(DATE_RE);
+    if(!dateMatch){i++;continue;}
 
-Raw statement text:
-${rawText.substring(0,12000)}`;
+    // Parse date → YYYY-MM-DD
+    const rawDate = dateMatch[1];
+    const parts = rawDate.split(/[-\/]/);
+    const date = parts[2]+'-'+parts[1]+'-'+parts[0];
 
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:4000,
-        messages:[{role:'user',content:prompt}]
-      })
-    });
-    const data=await resp.json();
-    const text=data.content?.[0]?.text||'';
-    let parsed=[];
-    try{
-      const clean=text.replace(/```json|```/g,'').trim();
-      parsed=JSON.parse(clean);
-      if(!Array.isArray(parsed))parsed=[];
-    }catch(e){
-      console.error('Claude JSON parse error:',e,text);
-      toast('❌ AI could not parse the statement. Please try again.','#e05c5c');
-      setImpStep(1);return;
+    // Accumulate full row text (narration may continue on next line)
+    let fullLine = line;
+    // Peek at next lines: if they don't start with a date and aren't blank, they're continuation
+    let j = i+1;
+    while(j < lines.length){
+      const next = lines[j];
+      if(!next || DATE_RE.test(next) || SKIP.test(next)) break;
+      // Stop if this looks like a pure amount line (only numbers/commas/dots/spaces)
+      if(/^[\d,\.\s]+$/.test(next)) break;
+      fullLine += ' ' + next;
+      j++;
     }
-    if(!parsed.length){
-      toast('⚠ No debit transactions found in statement.','#f59e0b');
-      setImpStep(1);return;
+    i = j; // advance past continuation lines
+
+    // Skip header/footer rows
+    if(SKIP.test(fullLine)){continue;}
+
+    // Extract all amounts from the line
+    const amounts = [...fullLine.matchAll(AMT_RE)].map(m=>parseFloat(m[0].replace(/,/g,'')));
+    if(amounts.length < 2){continue;} // need at least withdrawal + balance
+
+    // Kotak column order: [Chq/Ref No.?]  Withdrawal  Deposit  Balance
+    // If 3 amounts: withdrawal, deposit, balance — check which is non-zero
+    // If 2 amounts: withdrawal/deposit, balance
+    let withdrawal = null, deposit = null;
+    if(amounts.length >= 3){
+      // last amount is always balance
+      // second-to-last: if amount before it is 0-like, it's deposit
+      // heuristic: withdrawal = amounts[amounts.length-3], deposit = amounts[amounts.length-2]
+      withdrawal = amounts[amounts.length-3];
+      deposit = amounts[amounts.length-2];
+      // if deposit is clearly a balance (very large) swap
+      if(deposit > 100000 && withdrawal < deposit) { withdrawal = amounts[amounts.length-2]; deposit = 0; }
+    } else {
+      // 2 amounts: first is transaction, second is balance
+      withdrawal = amounts[0];
+      deposit = 0;
     }
-    importedRows=parsed.map((r,i)=>({...r,_id:i,_include:true,_dup:false,_tags:[...activeTagFilters]}));
-    checkDuplicates();
-    buildReviewTable();
-    setImpStep(3);
-  }catch(e){
-    console.error('Claude API error:',e);
-    toast('❌ AI parsing failed. Check connection and try again.','#e05c5c');
-    setImpStep(1);
+
+    // Skip credits/deposits (only want debits)
+    if(!withdrawal || withdrawal <= 0) {continue;}
+    // Skip if withdrawal looks like a balance (implausibly large relative to others)
+    if(withdrawal > 10000000) {continue;}
+
+    // Extract narration — everything after the date, before the ref number / amounts
+    let narration = fullLine.replace(DATE_RE,'').trim();
+    // Remove trailing amounts
+    narration = narration.replace(/\s+[\d,]+\.\d{2}.*$/,'').trim();
+    // Remove leading ref numbers (pure digit strings > 6 chars)
+    narration = narration.replace(/^\d{6,}\s*/,'').trim();
+    if(!narration) narration = 'Transaction';
+
+    // Clean up narration → readable description
+    const description = cleanNarration(narration);
+    // Infer payment method
+    const paymentMethod = inferPayment(narration);
+    // Infer category
+    const category = inferCategory(narration, description);
+
+    transactions.push({date, description, amount: withdrawal, type:'debit', paymentMethod, category, raw: narration});
   }
+  return transactions;
 }
+
+function cleanNarration(raw){
+  let s = raw.toUpperCase();
+  // UPI patterns
+  s = s.replace(/^UPI[-\/]?/i,'');
+  s = s.replace(/[-\/]\d{8,}.*$/,''); // remove ref numbers
+  s = s.replace(/[-\/]\d{10,}/g,'');
+  // Common prefixes to strip
+  s = s.replace(/^(IMPS|NEFT|RTGS|ATM WDL|ATM\/|POS\/|ACH D\/|ECS D\/|SI\/|EMI\/|NACH\/)\s*/i,'');
+  // Extract meaningful part — take up to first long digit sequence or slash
+  const parts = s.split(/[-\/|@]/);
+  // Pick longest non-numeric part
+  let best = parts.map(p=>p.trim()).filter(p=>p.length>2&&!/^\d+$/.test(p)).sort((a,b)=>b.length-a.length)[0]||s;
+  // Title case
+  best = best.toLowerCase().replace(/\w/g,c=>c.toUpperCase()).trim();
+  // Known merchant mappings
+  const MAP = {
+    'Zomato':['ZOMATO'],'Swiggy':['SWIGGY'],'Blinkit':['BLINKIT','GROFERS'],
+    'Zepto':['ZEPTO'],'BigBasket':['BIGBASKET','BIG BASKET'],
+    'Amazon':['AMAZON'],'Flipkart':['FLIPKART'],'Myntra':['MYNTRA'],
+    'Netflix':['NETFLIX'],'Spotify':['SPOTIFY'],'Prime Video':['PRIMEVIDEO','PRIME VIDEO'],
+    'Hotstar':['HOTSTAR','DISNEY'],'YouTube Premium':['YOUTUBE'],
+    'Uber':['UBER'],'Ola':['OLA CAB','OLAELECTRIC'],'Rapido':['RAPIDO'],
+    'IRCTC':['IRCTC'],'MakeMyTrip':['MAKEMYTRIP','MMT'],'Redbus':['REDBUS'],
+    'PharmEasy':['PHARMEASY'],'1mg':['TATA 1MG','1MG'],
+    'Petrol/Fuel':['HPCL','BPCL','IOCL','INDIAN OIL','HP PETROL','BHARAT PETRO'],
+    'Electricity Bill':['MSEDCL','BESCOM','TNEB','BSES','TATA POWER','ADANI ELEC'],
+    'Mobile Recharge':['AIRTEL','JIO','VODAFONE','BSNL','VI '],
+    'Swiggy Instamart':['INSTAMART'],
+  };
+  const rawUp = raw.toUpperCase();
+  for(const [name, keys] of Object.entries(MAP)){
+    if(keys.some(k=>rawUp.includes(k))) return name;
+  }
+  return best.substring(0,40);
+}
+
+function inferPayment(narration){
+  const n = narration.toUpperCase();
+  if(/ATM|CASH WDL|ATM WDL/.test(n)) return 'Cash';
+  if(/UPI|BHIM|PHONEPE|GPAY|PAYTM|IMPS/.test(n)) return 'UPI';
+  if(/NEFT|RTGS|NACH|ECS|ACH/.test(n)) return 'UPI'; // bank transfer → UPI bucket
+  return 'UPI';
+}
+
+function inferCategory(narration, description){
+  const n = (narration+' '+description).toUpperCase();
+  if(/ZOMATO|SWIGGY|INSTAMART|ZEPTO|BLINKIT|GROFERS|BIGBASKET|DUNZO|RESTAURANT|CAFE|HOTEL|FOOD/.test(n)) return 'Food';
+  if(/HPCL|BPCL|IOCL|PETROL|FUEL|DIESEL|HP PETRO|BHARAT PETRO/.test(n)) return 'Fuel';
+  if(/AMAZON|FLIPKART|MYNTRA|MEESHO|NYKAA|AJIO|SHOPPING/.test(n)) return 'Shopping';
+  if(/NETFLIX|SPOTIFY|HOTSTAR|PRIME|YOUTUBE|BOOKMYSHOW|PVR|INOX|ZEE5/.test(n)) return 'Entertainment';
+  if(/UBER|OLA|RAPIDO|OLA CAB|AUTO|METRO|IRCTC|MAKEMYTRIP|MMT|REDBUS|FLIGHT|TRAIN/.test(n)) return 'Travel';
+  if(/AIRTEL|JIO|VODAFONE|BSNL|RECHARGE|BROADBAND|WIFI/.test(n)) return 'Mobile Recharge/WiFi';
+  if(/ELECTRICITY|MSEDCL|BESCOM|TNEB|BSES|TATA POWER|ADANI ELEC/.test(n)) return 'Electricity Bill';
+  if(/PHARMEASY|1MG|MEDPLUS|APOLLO|HOSPITAL|CLINIC|PHARMACY|HEALTH|DOCTOR/.test(n)) return 'Health & Wellness';
+  if(/SALARY|RENT|EMI|LOAN|HOUSING/.test(n)) return 'House EMI';
+  if(/CREDIT CARD|CARD PAYMENT|CREDITCARD/.test(n)) return 'Credit Card Bill';
+  if(/GROCERY|DMART|RELIANCE FRESH|MORE SUPER|BIGBAZAAR|SUPERMARKET/.test(n)) return 'Grocery';
+  if(/SALON|HAIRCUT|SPA|GROOMING/.test(n)) return 'Personal Care';
+  if(/OFFICE|STATIONERY|COURIER|PRINT/.test(n)) return 'Office Supply';
+  return 'Other';
+}
+
+function parseStatement(rawText){
+  // Try Kotak format
+  const results = parseKotakStatement(rawText);
+  return results;
+}
+
 
 function checkDuplicates(){
   importedRows.forEach(r=>{
