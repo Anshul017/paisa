@@ -1927,115 +1927,210 @@ async function processPdf(file,password){
 }
 
 function parseKotakStatement(rawText){
-  // ── Kotak PDF text parser ─────────────────────────────────────
-  // Kotak statement lines look like (after PDF text extraction):
-  //   03-03-2026 UPI-ZOMATO-9876543210 123456789 450.00 12,550.00
-  // or split across two lines when narration is long.
-  // Strategy: scan line by line, detect date-starting rows, accumulate
-  // narration, then find amounts using the last two numbers on the row
-  // (withdrawal, balance) vs three numbers (withdrawal, deposit, balance).
+  // Real Kotak format: row# DD Mon YYYY narration+ref  withdrawal  balance
+  // e.g: "1   06 Mar 2026   UPI/Redbus/606.../Collect UPI-xxx   1,553.00   3,06,426.03"
+  const MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+  const ROW_RE=/^(\d+)\s+(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(.*)/;
+  const CREDIT_RE=/cashback|earned|credit|deposit|salary|refund|reversal|interest|onbf|reward/i;
 
-  const lines = rawText.split('\n').map(l=>l.trim()).filter(Boolean);
-  const transactions = [];
+  const rawLines=rawText.split('\n').map(l=>l.trim()).filter(Boolean);
+  const transactions=[];
+  let inTxns=false;
+  let i=0;
 
-  // Date pattern DD-MM-YYYY or DD/MM/YYYY
-  const DATE_RE = /^(\d{2}[-\/]\d{2}[-\/]\d{4})/;
-  // Amount pattern — number with optional commas and decimals
-  const AMT_RE = /[\d,]+\.\d{2}/g;
+  while(i<rawLines.length){
+    const line=rawLines[i];
 
-  // Skip header/footer keywords
-  const SKIP = /opening balance|closing balance|statement of account|account no|branch|ifsc|nominee|page|sr\.?\s*no|date\s+narration|cheque|balance b\/f|balance c\/f|^s\.no/i;
-
-  let i = 0;
-  while(i < lines.length){
-    const line = lines[i];
-    const dateMatch = line.match(DATE_RE);
-    if(!dateMatch){i++;continue;}
-
-    // Parse date → YYYY-MM-DD
-    const rawDate = dateMatch[1];
-    const parts = rawDate.split(/[-\/]/);
-    const date = parts[2]+'-'+parts[1]+'-'+parts[0];
-
-    // Accumulate full row text (narration may continue on next line)
-    let fullLine = line;
-    // Peek at next lines: if they don't start with a date and aren't blank, they're continuation
-    let j = i+1;
-    while(j < lines.length){
-      const next = lines[j];
-      if(!next || DATE_RE.test(next) || SKIP.test(next)) break;
-      // Stop if this looks like a pure amount line (only numbers/commas/dots/spaces)
-      if(/^[\d,\.\s]+$/.test(next)) break;
-      fullLine += ' ' + next;
-      j++;
+    if(!inTxns){
+      if(/opening balance/i.test(line)){inTxns=true;}
+      i++;continue;
     }
-    i = j; // advance past continuation lines
+    if(/statement generated|page \d+ of|closing balance/i.test(line)){i++;continue;}
+    // Skip page header repeats
+    if(/^Anshul|^Account No\.|^Account Statement/i.test(line)){i++;continue;}
 
-    // Skip header/footer rows
-    if(SKIP.test(fullLine)){continue;}
+    const m=ROW_RE.exec(line);
+    if(!m){i++;continue;}
 
-    // Extract all amounts from the line
-    const amounts = [...fullLine.matchAll(AMT_RE)].map(m=>parseFloat(m[0].replace(/,/g,'')));
-    if(amounts.length < 2){continue;} // need at least withdrawal + balance
+    const dd=m[2],mon=m[3],yyyy=m[4];
+    const mm=String(MONTHS[mon]||1).padStart(2,'0');
+    const date=yyyy+'-'+mm+'-'+dd.padStart(2,'0');
+    let rest=m[5].trim();
 
-    // Kotak column order: [Chq/Ref No.?]  Withdrawal  Deposit  Balance
-    // If 3 amounts: withdrawal, deposit, balance — check which is non-zero
-    // If 2 amounts: withdrawal/deposit, balance
-    let withdrawal = null, deposit = null;
-    if(amounts.length >= 3){
-      // last amount is always balance
-      // second-to-last: if amount before it is 0-like, it's deposit
-      // heuristic: withdrawal = amounts[amounts.length-3], deposit = amounts[amounts.length-2]
-      withdrawal = amounts[amounts.length-3];
-      deposit = amounts[amounts.length-2];
-      // if deposit is clearly a balance (very large) swap
-      if(deposit > 100000 && withdrawal < deposit) { withdrawal = amounts[amounts.length-2]; deposit = 0; }
+    // Absorb continuation lines (don't start with row number + date)
+    i++;
+    while(i<rawLines.length){
+      const nxt=rawLines[i];
+      if(ROW_RE.test(nxt)) break;
+      if(/statement generated|page \d+ of|closing balance/i.test(nxt)) break;
+      if(/^Anshul|^Account No\.|^Account Statement/i.test(nxt)) break;
+      // If it's just a hex string or short noise, absorb and skip
+      rest=rest+' '+nxt;
+      i++;
+      // Stop after one continuation line (avoids eating next real row)
+      break;
+    }
+
+    // Skip credit/cashback rows
+    if(CREDIT_RE.test(rest)) continue;
+
+    // Split by 2+ spaces to tokenise
+    const tokens=rest.split(/\s{2,}/).map(t=>t.trim()).filter(Boolean);
+
+    // Peel off amount tokens from the right
+    const amtTokens=[];
+    let cut=tokens.length;
+    for(let t=tokens.length-1;t>=0;t--){
+      if(/^[\d,]+\.\d{2}$/.test(tokens[t])){amtTokens.unshift(tokens[t]);cut=t;}
+      else break;
+    }
+    if(!amtTokens.length) continue;
+
+    const amounts=amtTokens.map(a=>parseFloat(a.replace(/,/g,'')));
+    const narration=tokens.slice(0,cut).join(' ').trim()||rest.replace(/[\d,]+\.\d{2}/g,'').trim();
+    if(!narration) continue;
+
+    // Determine withdrawal vs deposit
+    // If 3+ amounts: [withdrawal, deposit, balance] — if withdrawal=0 skip
+    // If 2 amounts: [transaction, balance]
+    let withdrawal=0;
+    if(amounts.length>=3){
+      withdrawal=amounts[0];
+    } else if(amounts.length===2){
+      // Could be withdrawal+balance or deposit+balance
+      // Credit rows already filtered above; treat as withdrawal
+      withdrawal=amounts[0];
     } else {
-      // 2 amounts: first is transaction, second is balance
-      withdrawal = amounts[0];
-      deposit = 0;
+      continue;
     }
 
-    // Skip credits/deposits (only want debits)
-    if(!withdrawal || withdrawal <= 0) {continue;}
-    // Skip if withdrawal looks like a balance (implausibly large relative to others)
-    if(withdrawal > 10000000) {continue;}
+    if(withdrawal<=0) continue;
 
-    // Extract narration — everything after the date, before the ref number / amounts
-    let narration = fullLine.replace(DATE_RE,'').trim();
-    // Remove trailing amounts
-    narration = narration.replace(/\s+[\d,]+\.\d{2}.*$/,'').trim();
-    // Remove leading ref numbers (pure digit strings > 6 chars)
-    narration = narration.replace(/^\d{6,}\s*/,'').trim();
-    if(!narration) narration = 'Transaction';
+    const description=cleanNarration(narration);
+    const paymentMethod=inferPayment(narration);
+    const category=inferCategory(narration,description);
 
-    // Clean up narration → readable description
-    const description = cleanNarration(narration);
-    // Infer payment method
-    const paymentMethod = inferPayment(narration);
-    // Infer category
-    const category = inferCategory(narration, description);
-
-    transactions.push({date, description, amount: withdrawal, type:'debit', paymentMethod, category, raw: narration});
+    transactions.push({date,description,amount:withdrawal,type:'debit',
+      paymentMethod,category,raw:narration});
   }
   return transactions;
 }
 
+
+    // Stop at footer keywords
+    if(/statement generated|page \d+ of/i.test(line)) continue;
+    if(/closing balance/i.test(line)) continue;
+
+    // Try to match a transaction row: starts with row number + date
+    const m = line.match(ROW_RE);
+    if(!m) continue;
+
+    const dd = m[2], mon = m[3], yyyy = m[4];
+    const mm = String(MONTHS[mon]||1).padStart(2,'0');
+    const date = yyyy+'-'+mm+'-'+dd.padStart(2,'0');
+
+    // Everything after the date: narration + ref + amounts
+    let rest = m[5].trim();
+
+    // Peek at the next line — if it doesn't start with a row number and
+    // isn't a header/footer, it may be continuation of this row
+    if(i+1 < lines.length){
+      const nxt = lines[i+1];
+      if(!/^\d+\s+\d{2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(nxt) &&
+         !/opening balance|closing balance|statement generated|page \d/i.test(nxt) &&
+         !/^Account No\.|^Account Statement|^Anshul/i.test(nxt)){
+        rest = rest + ' ' + nxt.trim();
+        i++; // consume continuation line
+      }
+    }
+
+    // Extract all amount-like tokens from the end of the string
+    // Split by 2+ spaces to get tokens
+    const tokens = rest.split(/\s{2,}/).map(t=>t.trim()).filter(Boolean);
+
+    // Find amount tokens from the right — last 1-3 tokens may be amounts
+    const amtTokens = [];
+    const narTokens = [];
+    let fromRight = true;
+    for(let t=tokens.length-1;t>=0;t--){
+      if(fromRight && /^[\d,]+\.\d{2}$/.test(tokens[t])){
+        amtTokens.unshift(tokens[t]);
+      } else {
+        fromRight = false;
+        narTokens.unshift(tokens[t]);
+      }
+    }
+
+    if(amtTokens.length === 0) continue; // no amounts found
+
+    // Parse amounts — remove commas
+    const amounts = amtTokens.map(a=>parseFloat(a.replace(/,/g,'')));
+
+    // Kotak columns: Withdrawal(Dr.) | Deposit(Cr.) | Balance
+    // If 3 amounts: [withdrawal, deposit, balance] but one may be missing
+    // If 2 amounts: could be [withdrawal, balance] or [deposit, balance]
+    // If 1 amount: just balance
+
+    let withdrawal = 0;
+    if(amounts.length >= 3){
+      withdrawal = amounts[0]; // first is withdrawal
+    } else if(amounts.length === 2){
+      // Heuristic: if narration contains CASHBACK/CREDIT/EARNED → deposit
+      // Otherwise → withdrawal
+      const narUpper = narTokens.join(' ').toUpperCase();
+      if(/cashback|earned|credit|deposit|salary|refund|reversal/i.test(narUpper)){
+        withdrawal = 0; // it's a credit
+      } else {
+        withdrawal = amounts[0];
+      }
+    } else {
+      continue; // only balance, skip
+    }
+
+    if(withdrawal <= 0) continue; // skip credits
+
+    const narration = narTokens.join(' ').trim();
+    if(!narration) continue;
+
+    // Clean up narration
+    const description = cleanNarration(narration);
+    const paymentMethod = inferPayment(narration);
+    const category = inferCategory(narration, description);
+
+    transactions.push({date, description, amount:withdrawal, type:'debit',
+      paymentMethod, category, raw:narration});
+  }
+
+  return transactions;
+}
+
 function cleanNarration(raw){
-  let s = raw.toUpperCase();
-  // UPI patterns
-  s = s.replace(/^UPI[-\/]?/i,'');
-  s = s.replace(/[-\/]\d{8,}.*$/,''); // remove ref numbers
-  s = s.replace(/[-\/]\d{10,}/g,'');
-  // Common prefixes to strip
-  s = s.replace(/^(IMPS|NEFT|RTGS|ATM WDL|ATM\/|POS\/|ACH D\/|ECS D\/|SI\/|EMI\/|NACH\/)\s*/i,'');
-  // Extract meaningful part — take up to first long digit sequence or slash
-  const parts = s.split(/[-\/|@]/);
-  // Pick longest non-numeric part
-  let best = parts.map(p=>p.trim()).filter(p=>p.length>2&&!/^\d+$/.test(p)).sort((a,b)=>b.length-a.length)[0]||s;
+  // Kotak UPI format: "UPI/MERCHANT NAME/TXN_ID/NOTE"
+  // e.g. "UPI/Redbus India Pr/606591489235/Collect request UPI-606598145636"
+  // e.g. "UPI/RAJAN AUTO CARE/606516478854/UPI"
+  let s = raw;
+  let best = '';
+
+  // Extract merchant from UPI/MERCHANT/TXNID/NOTE pattern
+  const upiMatch = s.match(/^UPI\/([^\/]+)\/[\d]+\//i);
+  if(upiMatch){
+    best = upiMatch[1].trim();
+  } else {
+    // Strip common prefixes
+    s = s.replace(/^(IMPS|NEFT|RTGS|ATM WDL|ATM\/|POS\/|ACH D\/|ECS D\/|SI\/|EMI\/|NACH\/)\s*/i,'');
+    // Remove long digit ref sequences and UPI- refs
+    s = s.replace(/\d{8,}/g,' ').replace(/UPI-\d+/gi,' ').trim();
+    // Split and pick longest non-numeric part
+    const parts = s.split(/[-\/|@\s]+/);
+    best = parts.filter(p=>p.length>2&&!/^\d+$/.test(p)).sort((a,b)=>b.length-a.length)[0]||s;
+  }
+
   // Title case
-  best = best.toLowerCase().replace(/\w/g,c=>c.toUpperCase()).trim();
-  // Known merchant mappings
+  best = best.toLowerCase().replace(/\b\w/g,ch=>ch.toUpperCase()).trim();
+  if(!best || best.length < 2) best = raw.substring(0,30);
+
+  // Known merchant name overrides
+  const rawUp = raw.toUpperCase();
   const MAP = {
     'Zomato':['ZOMATO'],'Swiggy':['SWIGGY'],'Blinkit':['BLINKIT','GROFERS'],
     'Zepto':['ZEPTO'],'BigBasket':['BIGBASKET','BIG BASKET'],
@@ -2045,15 +2140,16 @@ function cleanNarration(raw){
     'Uber':['UBER'],'Ola':['OLA CAB','OLAELECTRIC'],'Rapido':['RAPIDO'],
     'IRCTC':['IRCTC'],'MakeMyTrip':['MAKEMYTRIP','MMT'],'Redbus':['REDBUS'],
     'PharmEasy':['PHARMEASY'],'1mg':['TATA 1MG','1MG'],
-    'Petrol/Fuel':['HPCL','BPCL','IOCL','INDIAN OIL','HP PETROL','BHARAT PETRO'],
+    'Petrol/Fuel':['HPCL','BPCL','IOCL','INDIAN OIL','HP PETROL','BHARAT PETRO','BALAJI PETR'],
     'Electricity Bill':['MSEDCL','BESCOM','TNEB','BSES','TATA POWER','ADANI ELEC'],
-    'Mobile Recharge':['AIRTEL','JIO','VODAFONE','BSNL','VI '],
+    'Mobile Recharge':['AIRTEL','JIO','VODAFONE','BSNL'],
     'Swiggy Instamart':['INSTAMART'],
   };
-  const rawUp = raw.toUpperCase();
   for(const [name, keys] of Object.entries(MAP)){
     if(keys.some(k=>rawUp.includes(k))) return name;
   }
+  return best.substring(0,40);
+}
   return best.substring(0,40);
 }
 
@@ -2066,7 +2162,10 @@ function inferPayment(narration){
 }
 
 function inferCategory(narration, description){
-  const n = (narration+' '+description).toUpperCase();
+  // For UPI transactions, extract merchant name for better matching
+  const upiMatch = narration.match(/^UPI\/([^\/]+)\//i);
+  const merchant = upiMatch ? upiMatch[1].toUpperCase() : '';
+  const n = (narration+' '+description+' '+merchant).toUpperCase();
   if(/ZOMATO|SWIGGY|INSTAMART|ZEPTO|BLINKIT|GROFERS|BIGBASKET|DUNZO|RESTAURANT|CAFE|HOTEL|FOOD/.test(n)) return 'Food';
   if(/HPCL|BPCL|IOCL|PETROL|FUEL|DIESEL|HP PETRO|BHARAT PETRO/.test(n)) return 'Fuel';
   if(/AMAZON|FLIPKART|MYNTRA|MEESHO|NYKAA|AJIO|SHOPPING/.test(n)) return 'Shopping';
