@@ -683,6 +683,9 @@ textarea{resize:vertical;min-height:65px;}
       </div>
       <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="handlePdfSelect(this)">
 
+      <!-- Debug output -->
+      <div id="impDebugText" style="display:none;margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:monospace;font-size:.72rem;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow-y:auto;word-break:break-all"></div>
+
       <!-- Password field (hidden until needed) -->
       <div id="pdfPasswordWrap" style="display:none;margin-top:16px">
         <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:6px">🔒 PDF Password <span style="opacity:.6">(Kotak: usually your CRN number)</span></label>
@@ -1897,7 +1900,13 @@ async function processPdf(file,password){
     document.getElementById('parseMsg').textContent='Parsing transactions…';
     const parsed = parseStatement(fullText);
     if(!parsed.length){
-      toast('⚠ No debit transactions found. Check the PDF is a Kotak statement.','#f59e0b');
+      // Show raw text for debugging
+      const debugDiv=document.getElementById('impDebugText');
+      if(debugDiv){
+        debugDiv.style.display='block';
+        debugDiv.textContent=fullText.substring(0,3000);
+      }
+      toast('⚠ No debit transactions found. See raw text below to help diagnose.','#f59e0b');
       setImpStep(1);return;
     }
     importedRows=parsed.map((r,i)=>({...r,_id:i,_include:true,_dup:false,_tags:[...activeTagFilters]}));
