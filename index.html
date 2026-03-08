@@ -868,11 +868,35 @@ window._splitCheckDirect=function(){
 };
 window._onAmtChange=function(){if(document.getElementById('splitCheck').checked)updateSplitRemaining();};
 
-function renderSplitPeople(){
+function renderSplitPeople(existingSplits){
+  if(!existingSplits)existingSplits=[];
   if(!people.length){
-    document.getElementById('splitPeopleList').innerHTML='<div style="color:var(--muted);font-size:.83rem">No people added yet. Go to \u{1F465} People tab first.</div>';
+    document.getElementById('splitPeopleList').innerHTML='<div style="color:var(--muted);font-size:.83rem">No people added yet.</div>';
     renderedPeople=[];return;
   }
+  renderedPeople=[...people];
+  var existingMap={};
+  existingSplits.forEach(function(s){existingMap[s.personId]=s.amount;});
+  document.getElementById('splitPeopleList').innerHTML=renderedPeople.map(function(p,idx){
+    var preAmt=existingMap[p.id]||'';
+    var preChecked=existingMap[p.id]!==undefined;
+    var chk=preChecked?' checked':'';
+    var color=personColor(p.id);
+    var init=(p.name[0]||'?').toUpperCase();
+    var nm=esc(p.name);
+    return '<div class="split-person-row">'
+      +'<input type="checkbox" class="split-check" id="sc_'+idx+'"'+chk+' onchange="updateSplitRemaining()">'
+      +'<div class="split-avatar" style="background:'+color+'">'+init+'</div>'
+      +'<div class="split-name">'+nm+'</div>'
+      +'<div style="position:relative;flex-shrink:0">'
+      +'<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:600;pointer-events:none;font-size:.85rem">₹</span>'
+      +'<input type="number" id="sa_'+idx+'" placeholder="0" min="0" step="0.01" value="'+preAmt+'"'
+      +' style="padding-left:26px;width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-family:DM Sans,sans-serif;font-size:.88rem;outline:none;padding-top:10px;padding-bottom:10px;"'
+      +' oninput="updateSplitRemaining()">'
+      +'</div></div>';
+  }).join('');
+  updateSplitRemaining();
+}
   renderedPeople=[...people];
   document.getElementById('splitPeopleList').innerHTML=renderedPeople.map((p,idx)=>`
     <div class="split-person-row">
@@ -949,21 +973,27 @@ function openExpModal(reset){
 window._openExpModal=openExpModal;
 window._openEditExp=function(id){
   const e=expenses.find(x=>x.id===id);if(!e)return;
-  editEId=id;document.getElementById('expTitle').textContent='Edit Expense';
-  document.getElementById('fDesc').value=e.desc;document.getElementById('fAmt').value=e.amount;
-  document.getElementById('fDate').value=e.date;document.getElementById('fPay').value=e.payment;
+  editEId=id;
+  document.getElementById('expTitle').textContent='Edit Expense';
+  document.getElementById('fDesc').value=e.desc;
+  document.getElementById('fAmt').value=e.amount;
+  document.getElementById('fDate').value=e.date;
+  document.getElementById('fPay').value=e.payment;
   document.getElementById('fNotes').value=e.notes||'';
-  document.getElementById('splitCheck').checked=false;document.getElementById('splitSection').className='split-section';
   buildCatSelect('fCat',e.category);
+  // Pre-populate existing splits for this expense
+  const existingSplits=splits.filter(s=>s.expenseId===id&&!s.settled);
+  const hasSplits=existingSplits.length>0||e.hasSplit;
+  document.getElementById('splitCheck').checked=hasSplits;
+  document.getElementById('splitSection').className='split-section'+(hasSplits?' open':'');
+  renderSplitPeople(existingSplits);
   document.getElementById('expOverlay').classList.add('open');
 };
 window._saveExp=async function(){
   if(saving)return;
   const desc=document.getElementById('fDesc').value.trim(),amount=parseFloat(document.getElementById('fAmt').value),date=document.getElementById('fDate').value,category=document.getElementById('fCat').value,payment=document.getElementById('fPay').value,notes=document.getElementById('fNotes').value.trim();
   if(!desc||!amount||!date||isNaN(amount)||amount<=0){toast('⚠ Fill all required fields.','#e05c5c');return;}
-  console.log('[Paisa] saveExp called, renderedPeople=',renderedPeople.map(p=>p.name), 'splitCheck=',document.getElementById('splitCheck')?.checked);
   const splitData=getSplitData();
-  console.log('[Paisa] splitData=',splitData);
   const splitTotal=splitData.reduce((s,x)=>s+x.amount,0);
   if(splitData.length&&splitTotal>amount+0.01){toast('⚠ Split amounts exceed total expense.','#e05c5c');return;}
   const btn=document.getElementById('expSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
@@ -973,23 +1003,35 @@ window._saveExp=async function(){
     if(editEId){
       await updateDoc(expDocR(editEId),data);
       expId=editEId;
-    } else {
-      const ref=await addDoc(expCol(),data);
-      expId=ref.id;
-    }
-    // save splits — always write AFTER expense is saved
-    if(!editEId&&splitData.length){
+      // Clear old splits for this expense, then write new ones
+      const oldSplits=splits.filter(s=>s.expenseId===expId);
       const batch=writeBatch(db);
+      oldSplits.forEach(s=>batch.delete(splitDocR(s.id)));
       splitData.forEach(s=>{
         const newRef=doc(collection(db,`users/${currentUser.uid}/splits`));
         batch.set(newRef,{personId:s.personId,amount:Number(s.amount),desc,date,expenseId:expId,type:'split',settled:false,createdAt:new Date().toISOString()});
       });
       await batch.commit();
-      toast(`✓ Split saved! ${splitData.length} person${splitData.length>1?'s':''}  owe${splitData.length>1?'':'s'} you`,'#9b72cf');
-    } else if(!editEId){
-      toast('✓ Expense added');
+      if(splitData.length){
+        toast(`✓ Expense updated & re-split with ${splitData.length} person${splitData.length>1?'s':''}!`,'#9b72cf');
+      } else {
+        toast('✓ Expense updated');
+      }
     } else {
-      toast('✓ Expense updated');
+      const ref=await addDoc(expCol(),data);
+      expId=ref.id;
+      // Write new splits
+      if(splitData.length){
+        const batch=writeBatch(db);
+        splitData.forEach(s=>{
+          const newRef=doc(collection(db,`users/${currentUser.uid}/splits`));
+          batch.set(newRef,{personId:s.personId,amount:Number(s.amount),desc,date,expenseId:expId,type:'split',settled:false,createdAt:new Date().toISOString()});
+        });
+        await batch.commit();
+        toast(`✓ Split saved! ${splitData.length} person${splitData.length>1?'s':''} owe${splitData.length>1?'':'s'} you`,'#9b72cf');
+      } else {
+        toast('✓ Expense added');
+      }
     }
     window._closeModal('expOverlay');
   }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');console.error('saveExp error:',err);}
@@ -997,8 +1039,15 @@ window._saveExp=async function(){
 };
 window._delExp=async function(id){
   setSyncStatus('syncing','Deleting…');
-  try{await deleteDoc(expDocR(id));toast('🗑 Expense deleted');}
-  catch(e){toast('❌ Delete failed','#e05c5c');}
+  try{
+    const batch=writeBatch(db);
+    // Delete the expense itself
+    batch.delete(expDocR(id));
+    // Delete all associated splits (settled or not)
+    splits.filter(s=>s.expenseId===id).forEach(s=>batch.delete(splitDocR(s.id)));
+    await batch.commit();
+    toast('🗑 Expense & split dues removed');
+  }catch(e){toast('❌ Delete failed','#e05c5c');}
 };
 
 // ── RECEIVED CRUD ────────────────────────────────────────────────
