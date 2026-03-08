@@ -1038,16 +1038,24 @@ window._saveExp=async function(){
   btn.textContent='Save Expense';btn.disabled=false;saving=false;
 };
 window._delExp=async function(id){
+  if(!confirm('Delete this expense? Split dues with friends will also be removed.'))return;
   setSyncStatus('syncing','Deleting…');
   try{
-    const batch=writeBatch(db);
-    // Delete the expense itself
-    batch.delete(expDocR(id));
-    // Delete all associated splits (settled or not)
-    splits.filter(s=>s.expenseId===id).forEach(s=>batch.delete(splitDocR(s.id)));
-    await batch.commit();
-    toast('🗑 Expense & split dues removed');
-  }catch(e){toast('❌ Delete failed','#e05c5c');}
+    // Delete expense first on its own (always works)
+    await deleteDoc(expDocR(id));
+    // Then delete any associated splits separately
+    const relatedSplits=splits.filter(s=>s.expenseId===id);
+    if(relatedSplits.length){
+      const batch=writeBatch(db);
+      relatedSplits.forEach(s=>batch.delete(splitDocR(s.id)));
+      await batch.commit();
+    }
+    toast('🗑 Expense deleted'+(relatedSplits.length?' & split dues removed':''));
+  }catch(e){
+    console.error('delExp error:',e);
+    toast('❌ Delete failed: '+e.message,'#e05c5c');
+    setSyncStatus('err','Delete error');
+  }
 };
 
 // ── RECEIVED CRUD ────────────────────────────────────────────────
