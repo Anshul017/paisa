@@ -1929,16 +1929,17 @@ async function processPdf(file,password){
 function parseKotakStatement(rawText){
   var MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
   var ROW_RE=/^(\d+)\s+(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(.*)/;
-  var CREDIT_RE=/cashback|earned|onbf|reward|refund interest/i;
+  var CREDIT_RE=/cashback|earned|onbf|reward/i;
   var SKIP_RE=/statement generated|page \d|closing balance|^Anshul|^Account No|^Account Statement/i;
   var rawLines=rawText.split('\n');
   var transactions=[];
+  var skipped=[];  // debug: track skipped rows
   var inTxns=false;
   var i=0;
   while(i<rawLines.length){
     var line=rawLines[i].trim();
     i++;
-    if(!line) {/* skip blank */}
+    if(!line){/* blank */}
     else if(!inTxns){
       if(/opening balance/i.test(line)) inTxns=true;
     } else if(SKIP_RE.test(line)){
@@ -1946,20 +1947,26 @@ function parseKotakStatement(rawText){
     } else {
       var m=ROW_RE.exec(line);
       if(m){
-        var dd=m[2],mon=m[3],yyyy=m[4];
+        var rowNum=m[1],dd=m[2],mon=m[3],yyyy=m[4];
         var mm=String(MONTHS[mon]||1).padStart(2,'0');
         var date=yyyy+'-'+mm+'-'+dd.padStart(2,'0');
         var rest=m[5].trim();
-        // Absorb one continuation line if next doesn't start a new row
-        if(i<rawLines.length){
+        // Absorb continuation lines — keep going until we hit a new row or skip line
+        while(i<rawLines.length){
           var nxt=rawLines[i].trim();
-          if(nxt && !ROW_RE.test(nxt) && !SKIP_RE.test(nxt)){
-            rest=rest+' '+nxt;
-            i++;
-          }
+          if(!nxt){break;}  // blank line = end of row
+          if(ROW_RE.test(nxt)){break;}  // next transaction row
+          if(SKIP_RE.test(nxt)){break;}  // header/footer
+          // If this line has amounts at end, it's likely a continuation — absorb
+          rest=rest+' '+nxt;
+          i++;
+          // If rest now ends with an amount, we have a complete row — stop
+          if(/[\d,]+\.\d{2}\s*$/.test(rest)) break;
         }
-        // Skip credit rows
-        if(!CREDIT_RE.test(rest)){
+        // Is this a credit row?
+        if(CREDIT_RE.test(rest)){
+          skipped.push({rowNum:rowNum,reason:'credit',rest:rest.substring(0,80)});
+        } else {
           // Tokenise by 2+ spaces
           var tokens=rest.split(/\s{2,}/).map(function(t){return t.trim();}).filter(Boolean);
           // Peel amount tokens from right
@@ -1969,24 +1976,47 @@ function parseKotakStatement(rawText){
             if(/^[\d,]+\.\d{2}$/.test(tokens[t])){amtTokens.unshift(tokens[t]);cut=t;}
             else break;
           }
-          if(amtTokens.length){
+          if(!amtTokens.length){
+            skipped.push({rowNum:rowNum,reason:'no_amounts',rest:rest.substring(0,80)});
+          } else {
             var amounts=amtTokens.map(function(a){return parseFloat(a.replace(/,/g,''));});
             var narration=tokens.slice(0,cut).join(' ').trim()||rest.replace(/[\d,]+\.\d{2}/g,'').trim();
+            // Kotak columns: Withdrawal | Deposit | Balance
+            // For debits: withdrawal>0, deposit=0
+            // For credits: withdrawal=0, deposit>0
+            // When 3 amounts: [withdrawal, deposit, balance] — if withdrawal=0, it's a credit
+            // When 2 amounts: [withdrawal_or_deposit, balance]
             var withdrawal=0;
-            if(amounts.length>=3){ withdrawal=amounts[0]; }
-            else if(amounts.length===2){ withdrawal=amounts[0]; }
+            if(amounts.length>=3){
+              withdrawal=amounts[0];  // first col = withdrawal
+              if(withdrawal===0){
+                skipped.push({rowNum:rowNum,reason:'deposit_3col',amounts:amounts,rest:rest.substring(0,80)});
+              }
+            } else if(amounts.length===2){
+              withdrawal=amounts[0];
+            } else {
+              skipped.push({rowNum:rowNum,reason:'only_1_amount',rest:rest.substring(0,80)});
+            }
             if(withdrawal>0 && narration){
               var description=cleanNarration(narration);
               var paymentMethod=inferPayment(narration);
               var category=inferCategory(narration,description);
               transactions.push({date:date,description:description,amount:withdrawal,
                 type:'debit',paymentMethod:paymentMethod,category:category,raw:narration});
+            } else if(withdrawal<=0 && amounts.length<3){
+              skipped.push({rowNum:rowNum,reason:'zero_withdrawal_2col',amounts:amounts,rest:rest.substring(0,80)});
             }
           }
         }
       }
     }
   }
+  // Log debug info to console
+  console.log('[Paisa Import] Parsed:',transactions.length,'debits,',skipped.length,'skipped');
+  console.log('[Paisa Import] Skipped rows:');
+  skipped.forEach(function(s){console.log('  Row',s.rowNum,'('+s.reason+'):',s.rest,'| amounts:',s.amounts||'');});
+  // Store skipped for UI display
+  window._lastImportSkipped=skipped;
   return transactions;
 }
 function cleanNarration(raw){
@@ -2166,41 +2196,47 @@ window.confirmImport=async function(){
   const toImport=importedRows.filter(r=>r._include);
   if(!toImport.length){toast('⚠ No rows selected','#e05c5c');return;}
   const btn=document.getElementById('impConfirmBtn');
-  btn.textContent='Importing…';btn.disabled=true;
+  const total=toImport.length;
+  btn.textContent='Importing 0 / '+total+'…';btn.disabled=true;
   setSyncStatus('syncing','Importing…');
   try{
-    // collect all unique tags to ensure they exist
-    const allNewTags=new Set();
-    toImport.forEach(r=>{
-      const tagStr=document.getElementById('impTag'+r._id)?.value||'';
-      tagStr.split(',').map(t=>t.trim()).filter(Boolean).forEach(t=>allNewTags.add(t));
-    });
-    for(const t of allNewTags)await ensureTag(t);
+    // collect all row data from DOM up front (DOM may change)
+    const rows=toImport.map(r=>({
+      desc:document.getElementById('impDesc'+r._id)?.value||r.description,
+      cat:document.getElementById('impCat'+r._id)?.value||r.category||'Other',
+      pay:document.getElementById('impPay'+r._id)?.value||r.paymentMethod||'UPI',
+      tags:(document.getElementById('impTag'+r._id)?.value||'').split(',').map(t=>t.trim()).filter(Boolean),
+      amount:Number(r.amount),
+      date:r.date
+    }));
 
-    // batch write expenses
-    const CHUNK=400;
+    // ensure all tags exist (safe — skip on error)
+    const allNewTags=new Set();
+    rows.forEach(r=>r.tags.forEach(t=>allNewTags.add(t)));
+    for(const t of allNewTags){try{await ensureTag(t);}catch(e){console.warn('Tag skip:',e);}}
+
+    // write in chunks of 200 (well under Firestore 500 limit)
+    const CHUNK=200;
     let written=0;
-    for(let i=0;i<toImport.length;i+=CHUNK){
-      const chunk=toImport.slice(i,i+CHUNK);
+    for(let i=0;i<rows.length;i+=CHUNK){
+      const chunk=rows.slice(i,i+CHUNK);
       const batch=writeBatch(db);
+      const ts=new Date().toISOString();
       chunk.forEach(r=>{
-        const desc=document.getElementById('impDesc'+r._id)?.value||r.description;
-        const cat=document.getElementById('impCat'+r._id)?.value||r.category||'Other';
-        const pay=document.getElementById('impPay'+r._id)?.value||r.paymentMethod||'UPI';
-        const tagStr=document.getElementById('impTag'+r._id)?.value||'';
-        const rowTags=tagStr.split(',').map(t=>t.trim()).filter(Boolean);
         const newRef=doc(expCol());
-        batch.set(newRef,{desc,amount:Number(r.amount),date:r.date,category:cat,payment:pay,notes:'',tags:rowTags,hasSplit:false,importedAt:new Date().toISOString()});
-        written++;
+        batch.set(newRef,{desc:r.desc,amount:r.amount,date:r.date,category:r.cat,
+          payment:r.pay,notes:'',tags:r.tags,hasSplit:false,importedAt:ts});
       });
       await batch.commit();
+      written+=chunk.length;
+      btn.textContent='Importing '+written+' / '+total+'…';
     }
-    toast(`✓ ${written} transaction${written!==1?'s':''} imported!`,'#4caf7d');
+    toast('✓ '+written+' transaction'+(written!==1?'s':'')+' imported!','#4caf7d');
     resetImport();
   }catch(e){
     console.error('Import error:',e);
     toast('❌ Import failed: '+e.message,'#e05c5c');
-    btn.textContent=`Import ${toImport.length} Transactions`;btn.disabled=false;
+    btn.textContent='Import '+total+' Transactions';btn.disabled=false;
   }
 };
 
