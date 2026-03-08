@@ -1926,8 +1926,7 @@ function parseKotakStatement(rawText){
   // narration, then find amounts using the last two numbers on the row
   // (withdrawal, balance) vs three numbers (withdrawal, deposit, balance).
 
-  const lines = rawText.split('
-').map(l=>l.trim()).filter(Boolean);
+  const lines = rawText.split('\n').map(l=>l.trim()).filter(Boolean);
   const transactions = [];
 
   // Date pattern DD-MM-YYYY or DD/MM/YYYY
