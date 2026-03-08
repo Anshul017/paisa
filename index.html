@@ -897,21 +897,6 @@ function renderSplitPeople(existingSplits){
   }).join('');
   updateSplitRemaining();
 }
-  renderedPeople=[...people];
-  document.getElementById('splitPeopleList').innerHTML=renderedPeople.map((p,idx)=>`
-    <div class="split-person-row">
-      <input type="checkbox" class="split-check" id="sc_${idx}" onchange="updateSplitRemaining()">
-      <div class="split-avatar" style="background:${personColor(p.id)}">${(p.name[0]||'?').toUpperCase()}</div>
-      <div class="split-name">${esc(p.name)}</div>
-      <div style="position:relative;flex-shrink:0">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:600;pointer-events:none;font-size:.85rem">\u20B9</span>
-        <input type="number" id="sa_${idx}" placeholder="0" min="0" step="0.01"
-          style="padding-left:26px;width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;padding-top:10px;padding-bottom:10px;"
-          oninput="updateSplitRemaining()">
-      </div>
-    </div>`).join('');
-  updateSplitRemaining();
-}
 function updateSplitRemaining(){
   const total=parseFloat(document.getElementById('fAmt').value)||0;
   let allocated=0;
