@@ -1929,13 +1929,19 @@ async function processPdf(file,password){
 function parseKotakStatement(rawText){
   var MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
   var ROW_RE=/^(\d+)\s+(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(.*)/;
-  var CREDIT_RE=/cashback|earned|onbf|reward/i;
+  // Credits to skip: cashback, incoming IMPS/NEFT (Recd:), interest
+  var CREDIT_RE=/cashback|earned|onbf|reward|^recd:|interest credit|salary credit/i;
   var SKIP_RE=/statement generated|page \d|closing balance|^Anshul|^Account No|^Account Statement/i;
+  // Loose amount pattern — matches numbers that may be truncated at end of line
+  // e.g. "1,46,394." or "2,03,285.47 Ra" — we extract all digit-comma-dot sequences
+  var AMT_LOOSE=/[\d,]+\.\d*/g;
+
   var rawLines=rawText.split('\n');
   var transactions=[];
-  var skipped=[];  // debug: track skipped rows
+  var skipped=[];
   var inTxns=false;
   var i=0;
+
   while(i<rawLines.length){
     var line=rawLines[i].trim();
     i++;
@@ -1943,7 +1949,7 @@ function parseKotakStatement(rawText){
     else if(!inTxns){
       if(/opening balance/i.test(line)) inTxns=true;
     } else if(SKIP_RE.test(line)){
-      /* skip headers/footers */
+      /* skip */
     } else {
       var m=ROW_RE.exec(line);
       if(m){
@@ -1951,72 +1957,79 @@ function parseKotakStatement(rawText){
         var mm=String(MONTHS[mon]||1).padStart(2,'0');
         var date=yyyy+'-'+mm+'-'+dd.padStart(2,'0');
         var rest=m[5].trim();
-        // Absorb continuation lines — keep going until we hit a new row or skip line
+
+        // Absorb continuation lines until we hit a new row, skip line, or blank
         while(i<rawLines.length){
           var nxt=rawLines[i].trim();
-          if(!nxt){break;}  // blank line = end of row
-          if(ROW_RE.test(nxt)){break;}  // next transaction row
-          if(SKIP_RE.test(nxt)){break;}  // header/footer
-          // If this line has amounts at end, it's likely a continuation — absorb
+          if(!nxt) break;
+          if(ROW_RE.test(nxt)) break;
+          if(SKIP_RE.test(nxt)) break;
           rest=rest+' '+nxt;
           i++;
-          // If rest now ends with an amount, we have a complete row — stop
+          // Stop once we have a complete amount at end (not truncated)
           if(/[\d,]+\.\d{2}\s*$/.test(rest)) break;
         }
-        // Is this a credit row?
+
+        // Skip credits
         if(CREDIT_RE.test(rest)){
-          skipped.push({rowNum:rowNum,reason:'credit',rest:rest.substring(0,80)});
+          skipped.push({rowNum:rowNum,reason:'credit'});
         } else {
-          // Tokenise by 2+ spaces
-          var tokens=rest.split(/\s{2,}/).map(function(t){return t.trim();}).filter(Boolean);
-          // Peel amount tokens from right
-          var amtTokens=[];
-          var cut=tokens.length;
-          for(var t=tokens.length-1;t>=0;t--){
-            if(/^[\d,]+\.\d{2}$/.test(tokens[t])){amtTokens.unshift(tokens[t]);cut=t;}
-            else break;
+          // Extract ALL amount-like numbers from the string (loose match)
+          var allAmts=[];
+          var amtMatch;
+          AMT_LOOSE.lastIndex=0;
+          var restForAmts=rest;
+          while((amtMatch=AMT_LOOSE.exec(restForAmts))!==null){
+            var val=parseFloat(amtMatch[0].replace(/,/g,''));
+            if(!isNaN(val) && val>0) allAmts.push(val);
           }
-          if(!amtTokens.length){
+
+          if(!allAmts.length){
             skipped.push({rowNum:rowNum,reason:'no_amounts',rest:rest.substring(0,80)});
           } else {
-            var amounts=amtTokens.map(function(a){return parseFloat(a.replace(/,/g,''));});
-            var narration=tokens.slice(0,cut).join(' ').trim()||rest.replace(/[\d,]+\.\d{2}/g,'').trim();
-            // Kotak columns: Withdrawal | Deposit | Balance
-            // For debits: withdrawal>0, deposit=0
-            // For credits: withdrawal=0, deposit>0
-            // When 3 amounts: [withdrawal, deposit, balance] — if withdrawal=0, it's a credit
-            // When 2 amounts: [withdrawal_or_deposit, balance]
+            // Strip all amounts from the narration
+            var narration=rest
+              .replace(/\s+UPI-\d+/g,' ')          // remove UPI ref numbers
+              .replace(/\s+IMPS-\d+/g,' ')          // remove IMPS refs
+              .replace(/\s+CCBILL-[\d.]+/g,' ')     // remove CCBILL refs
+              .replace(/[\d,]+\.\d+/g,' ')           // remove all amounts
+              .replace(/\s{2,}/g,' ')
+              .trim();
+
+            // Determine withdrawal amount
+            // Kotak cols: Withdrawal | Deposit | Balance (last is always balance)
+            // Strategy: second-to-last amount is either withdrawal or deposit
+            // If row is not a credit (already filtered), treat it as a debit
+            // Use the SECOND-TO-LAST amount as the transaction amount
+            // (last is balance, second-to-last is withdrawal or deposit)
             var withdrawal=0;
-            if(amounts.length>=3){
-              withdrawal=amounts[0];  // first col = withdrawal
-              if(withdrawal===0){
-                skipped.push({rowNum:rowNum,reason:'deposit_3col',amounts:amounts,rest:rest.substring(0,80)});
-              }
-            } else if(amounts.length===2){
-              withdrawal=amounts[0];
+            if(allAmts.length>=2){
+              withdrawal=allAmts[allAmts.length-2]; // second to last = transaction amount
             } else {
-              skipped.push({rowNum:rowNum,reason:'only_1_amount',rest:rest.substring(0,80)});
+              withdrawal=allAmts[0]; // only one amount — use it
             }
-            if(withdrawal>0 && narration){
+
+            // Sanity check: skip if withdrawal looks like a balance (>10 lakh and only 1 amt)
+            if(withdrawal<=0 || (allAmts.length===1 && withdrawal>1000000)){
+              skipped.push({rowNum:rowNum,reason:'bad_amount',amounts:allAmts,rest:rest.substring(0,60)});
+            } else if(!narration || narration.length<2){
+              skipped.push({rowNum:rowNum,reason:'no_narration',rest:rest.substring(0,60)});
+            } else {
               var description=cleanNarration(narration);
               var paymentMethod=inferPayment(narration);
               var category=inferCategory(narration,description);
               transactions.push({date:date,description:description,amount:withdrawal,
                 type:'debit',paymentMethod:paymentMethod,category:category,raw:narration});
-            } else if(withdrawal<=0 && amounts.length<3){
-              skipped.push({rowNum:rowNum,reason:'zero_withdrawal_2col',amounts:amounts,rest:rest.substring(0,80)});
             }
           }
         }
       }
     }
   }
-  // Log debug info to console
   console.log('[Paisa Import] Parsed:',transactions.length,'debits,',skipped.length,'skipped');
-  console.log('[Paisa Import] Skipped rows:');
-  skipped.forEach(function(s){console.log('  Row',s.rowNum,'('+s.reason+'):',s.rest,'| amounts:',s.amounts||'');});
-  // Store skipped for UI display
-  window._lastImportSkipped=skipped;
+  skipped.forEach(function(s){
+    if(s.reason!=='credit') console.log('  Row',s.rowNum,'('+s.reason+'):',s.rest,'amts:',s.amounts||'');
+  });
   return transactions;
 }
 function cleanNarration(raw){
