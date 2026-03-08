@@ -1927,183 +1927,68 @@ async function processPdf(file,password){
 }
 
 function parseKotakStatement(rawText){
-  // Real Kotak format: row# DD Mon YYYY narration+ref  withdrawal  balance
-  // e.g: "1   06 Mar 2026   UPI/Redbus/606.../Collect UPI-xxx   1,553.00   3,06,426.03"
-  const MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
-  const ROW_RE=/^(\d+)\s+(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(.*)/;
-  const CREDIT_RE=/cashback|earned|credit|deposit|salary|refund|reversal|interest|onbf|reward/i;
-
-  const rawLines=rawText.split('\n').map(l=>l.trim()).filter(Boolean);
-  const transactions=[];
-  let inTxns=false;
-  let i=0;
-
+  var MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+  var ROW_RE=/^(\d+)\s+(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(.*)/;
+  var CREDIT_RE=/cashback|earned|onbf|reward|refund interest/i;
+  var SKIP_RE=/statement generated|page \d|closing balance|^Anshul|^Account No|^Account Statement/i;
+  var rawLines=rawText.split('\n');
+  var transactions=[];
+  var inTxns=false;
+  var i=0;
   while(i<rawLines.length){
-    const line=rawLines[i];
-
-    if(!inTxns){
-      if(/opening balance/i.test(line)){inTxns=true;}
-      i++;continue;
-    }
-    if(/statement generated|page \d+ of|closing balance/i.test(line)){i++;continue;}
-    // Skip page header repeats
-    if(/^Anshul|^Account No\.|^Account Statement/i.test(line)){i++;continue;}
-
-    const m=ROW_RE.exec(line);
-    if(!m){i++;continue;}
-
-    const dd=m[2],mon=m[3],yyyy=m[4];
-    const mm=String(MONTHS[mon]||1).padStart(2,'0');
-    const date=yyyy+'-'+mm+'-'+dd.padStart(2,'0');
-    let rest=m[5].trim();
-
-    // Absorb continuation lines (don't start with row number + date)
+    var line=rawLines[i].trim();
     i++;
-    while(i<rawLines.length){
-      const nxt=rawLines[i];
-      if(ROW_RE.test(nxt)) break;
-      if(/statement generated|page \d+ of|closing balance/i.test(nxt)) break;
-      if(/^Anshul|^Account No\.|^Account Statement/i.test(nxt)) break;
-      // If it's just a hex string or short noise, absorb and skip
-      rest=rest+' '+nxt;
-      i++;
-      // Stop after one continuation line (avoids eating next real row)
-      break;
-    }
-
-    // Skip credit/cashback rows
-    if(CREDIT_RE.test(rest)) continue;
-
-    // Split by 2+ spaces to tokenise
-    const tokens=rest.split(/\s{2,}/).map(t=>t.trim()).filter(Boolean);
-
-    // Peel off amount tokens from the right
-    const amtTokens=[];
-    let cut=tokens.length;
-    for(let t=tokens.length-1;t>=0;t--){
-      if(/^[\d,]+\.\d{2}$/.test(tokens[t])){amtTokens.unshift(tokens[t]);cut=t;}
-      else break;
-    }
-    if(!amtTokens.length) continue;
-
-    const amounts=amtTokens.map(a=>parseFloat(a.replace(/,/g,'')));
-    const narration=tokens.slice(0,cut).join(' ').trim()||rest.replace(/[\d,]+\.\d{2}/g,'').trim();
-    if(!narration) continue;
-
-    // Determine withdrawal vs deposit
-    // If 3+ amounts: [withdrawal, deposit, balance] — if withdrawal=0 skip
-    // If 2 amounts: [transaction, balance]
-    let withdrawal=0;
-    if(amounts.length>=3){
-      withdrawal=amounts[0];
-    } else if(amounts.length===2){
-      // Could be withdrawal+balance or deposit+balance
-      // Credit rows already filtered above; treat as withdrawal
-      withdrawal=amounts[0];
+    if(!line) {/* skip blank */}
+    else if(!inTxns){
+      if(/opening balance/i.test(line)) inTxns=true;
+    } else if(SKIP_RE.test(line)){
+      /* skip headers/footers */
     } else {
-      continue;
+      var m=ROW_RE.exec(line);
+      if(m){
+        var dd=m[2],mon=m[3],yyyy=m[4];
+        var mm=String(MONTHS[mon]||1).padStart(2,'0');
+        var date=yyyy+'-'+mm+'-'+dd.padStart(2,'0');
+        var rest=m[5].trim();
+        // Absorb one continuation line if next doesn't start a new row
+        if(i<rawLines.length){
+          var nxt=rawLines[i].trim();
+          if(nxt && !ROW_RE.test(nxt) && !SKIP_RE.test(nxt)){
+            rest=rest+' '+nxt;
+            i++;
+          }
+        }
+        // Skip credit rows
+        if(!CREDIT_RE.test(rest)){
+          // Tokenise by 2+ spaces
+          var tokens=rest.split(/\s{2,}/).map(function(t){return t.trim();}).filter(Boolean);
+          // Peel amount tokens from right
+          var amtTokens=[];
+          var cut=tokens.length;
+          for(var t=tokens.length-1;t>=0;t--){
+            if(/^[\d,]+\.\d{2}$/.test(tokens[t])){amtTokens.unshift(tokens[t]);cut=t;}
+            else break;
+          }
+          if(amtTokens.length){
+            var amounts=amtTokens.map(function(a){return parseFloat(a.replace(/,/g,''));});
+            var narration=tokens.slice(0,cut).join(' ').trim()||rest.replace(/[\d,]+\.\d{2}/g,'').trim();
+            var withdrawal=0;
+            if(amounts.length>=3){ withdrawal=amounts[0]; }
+            else if(amounts.length===2){ withdrawal=amounts[0]; }
+            if(withdrawal>0 && narration){
+              var description=cleanNarration(narration);
+              var paymentMethod=inferPayment(narration);
+              var category=inferCategory(narration,description);
+              transactions.push({date:date,description:description,amount:withdrawal,
+                type:'debit',paymentMethod:paymentMethod,category:category,raw:narration});
+            }
+          }
+        }
+      }
     }
-
-    if(withdrawal<=0) continue;
-
-    const description=cleanNarration(narration);
-    const paymentMethod=inferPayment(narration);
-    const category=inferCategory(narration,description);
-
-    transactions.push({date,description,amount:withdrawal,type:'debit',
-      paymentMethod,category,raw:narration});
   }
   return transactions;
 }
-
-
-    // Stop at footer keywords
-    if(/statement generated|page \d+ of/i.test(line)) continue;
-    if(/closing balance/i.test(line)) continue;
-
-    // Try to match a transaction row: starts with row number + date
-    const m = line.match(ROW_RE);
-    if(!m) continue;
-
-    const dd = m[2], mon = m[3], yyyy = m[4];
-    const mm = String(MONTHS[mon]||1).padStart(2,'0');
-    const date = yyyy+'-'+mm+'-'+dd.padStart(2,'0');
-
-    // Everything after the date: narration + ref + amounts
-    let rest = m[5].trim();
-
-    // Peek at the next line — if it doesn't start with a row number and
-    // isn't a header/footer, it may be continuation of this row
-    if(i+1 < lines.length){
-      const nxt = lines[i+1];
-      if(!/^\d+\s+\d{2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(nxt) &&
-         !/opening balance|closing balance|statement generated|page \d/i.test(nxt) &&
-         !/^Account No\.|^Account Statement|^Anshul/i.test(nxt)){
-        rest = rest + ' ' + nxt.trim();
-        i++; // consume continuation line
-      }
-    }
-
-    // Extract all amount-like tokens from the end of the string
-    // Split by 2+ spaces to get tokens
-    const tokens = rest.split(/\s{2,}/).map(t=>t.trim()).filter(Boolean);
-
-    // Find amount tokens from the right — last 1-3 tokens may be amounts
-    const amtTokens = [];
-    const narTokens = [];
-    let fromRight = true;
-    for(let t=tokens.length-1;t>=0;t--){
-      if(fromRight && /^[\d,]+\.\d{2}$/.test(tokens[t])){
-        amtTokens.unshift(tokens[t]);
-      } else {
-        fromRight = false;
-        narTokens.unshift(tokens[t]);
-      }
-    }
-
-    if(amtTokens.length === 0) continue; // no amounts found
-
-    // Parse amounts — remove commas
-    const amounts = amtTokens.map(a=>parseFloat(a.replace(/,/g,'')));
-
-    // Kotak columns: Withdrawal(Dr.) | Deposit(Cr.) | Balance
-    // If 3 amounts: [withdrawal, deposit, balance] but one may be missing
-    // If 2 amounts: could be [withdrawal, balance] or [deposit, balance]
-    // If 1 amount: just balance
-
-    let withdrawal = 0;
-    if(amounts.length >= 3){
-      withdrawal = amounts[0]; // first is withdrawal
-    } else if(amounts.length === 2){
-      // Heuristic: if narration contains CASHBACK/CREDIT/EARNED → deposit
-      // Otherwise → withdrawal
-      const narUpper = narTokens.join(' ').toUpperCase();
-      if(/cashback|earned|credit|deposit|salary|refund|reversal/i.test(narUpper)){
-        withdrawal = 0; // it's a credit
-      } else {
-        withdrawal = amounts[0];
-      }
-    } else {
-      continue; // only balance, skip
-    }
-
-    if(withdrawal <= 0) continue; // skip credits
-
-    const narration = narTokens.join(' ').trim();
-    if(!narration) continue;
-
-    // Clean up narration
-    const description = cleanNarration(narration);
-    const paymentMethod = inferPayment(narration);
-    const category = inferCategory(narration, description);
-
-    transactions.push({date, description, amount:withdrawal, type:'debit',
-      paymentMethod, category, raw:narration});
-  }
-
-  return transactions;
-}
-
 function cleanNarration(raw){
   // Kotak UPI format: "UPI/MERCHANT NAME/TXN_ID/NOTE"
   // e.g. "UPI/Redbus India Pr/606591489235/Collect request UPI-606598145636"
@@ -2148,8 +2033,6 @@ function cleanNarration(raw){
   for(const [name, keys] of Object.entries(MAP)){
     if(keys.some(k=>rawUp.includes(k))) return name;
   }
-  return best.substring(0,40);
-}
   return best.substring(0,40);
 }
 
