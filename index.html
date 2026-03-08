@@ -21,6 +21,36 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
 
+
+/* ── TAGS ── */
+.tag-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:600;color:#fff;white-space:nowrap;}
+.tag-chip .tag-x{cursor:pointer;opacity:.7;margin-left:2px;font-size:.75rem;}
+.tag-chip .tag-x:hover{opacity:1;}
+.tag-input-wrap{display:flex;flex-direction:column;gap:6px;position:relative;}
+.tag-chips-row{display:flex;flex-wrap:wrap;gap:5px;min-height:24px;}
+.tag-input-row{display:flex;gap:6px;}
+.tag-input-row input{flex:1;}
+.tag-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;z-index:50;max-height:160px;overflow-y:auto;box-shadow:0 4px 16px var(--shadow);margin-top:3px;}
+.tag-dropdown-item{padding:8px 14px;font-size:.85rem;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;}
+.tag-dropdown-item:hover{background:var(--surface2);}
+.tag-dot-sm{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.tag-filter-row{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0 2px;}
+.tag-filter-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:99px;font-size:.75rem;font-weight:600;border:2px solid transparent;cursor:pointer;transition:all .2s;background:transparent;}
+.tag-filter-btn.active{color:#fff !important;border-color:transparent !important;}
+.tag-banner{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;margin-bottom:4px;flex-wrap:wrap;}
+.tag-banner-label{font-size:.8rem;color:var(--muted);}
+.tag-banner-name{font-weight:600;font-size:.88rem;}
+.tag-banner-meta{font-size:.78rem;color:var(--muted);margin-left:auto;}
+.tag-banner-clear{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:8px;font-size:.75rem;cursor:pointer;white-space:nowrap;}
+.tag-banner-clear:hover{border-color:var(--red);color:var(--red);}
+.tag-mgr-item{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;}
+.tag-mgr-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.tag-mgr-name{flex:1;font-size:.88rem;font-weight:500;}
+.tag-mgr-count{font-size:.75rem;color:var(--muted);}
+.tag-mgr-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:7px;font-size:.75rem;cursor:pointer;transition:all .2s;}
+.tag-mgr-btn:hover{border-color:var(--accent);color:var(--accent);}
+.tag-mgr-del:hover{border-color:var(--red) !important;color:var(--red) !important;}
+
 /* AUTH */
 .auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:600;}
 .auth-box{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:44px 40px;width:420px;max-width:93vw;display:flex;flex-direction:column;align-items:center;box-shadow:0 8px 40px var(--shadow);}
@@ -396,6 +426,10 @@ textarea{resize:vertical;min-height:65px;}
     </div>
     <div class="card"><div class="card-title">📊 Monthly Insights</div><div id="insightsBody"></div></div>
     <div class="card"><div class="card-title" id="sPayTitle">By Payment Method</div><div id="payBreakdown"></div></div>
+    <div class="card" id="tagSidebarCard">
+      <div class="card-title">🏷 By Tag</div>
+      <div id="tagSidebarBody"></div>
+    </div>
     <div class="card">
       <div class="section-header">
         <div class="card-title" id="sCatTitle">By Category</div>
@@ -429,6 +463,7 @@ textarea{resize:vertical;min-height:65px;}
         </select>
       </div>
       <div class="fg full"><label>Notes (optional)</label><textarea id="fNotes" placeholder="Any additional details…"></textarea></div>
+      <div class="fg full"><label>Tags (optional)</label><div id="expTagInputWrap"></div></div>
     </div>
     <!-- SPLIT SECTION -->
     <div id="splitToggleWrap" style="margin-top:12px">
@@ -475,6 +510,7 @@ textarea{resize:vertical;min-height:65px;}
         </select>
       </div>
       <div class="fg full"><label>Notes (optional)</label><textarea id="rNotes" placeholder="Reference no., invoice, etc."></textarea></div>
+      <div class="fg full"><label>Tags (optional)</label><div id="recTagInputWrap"></div></div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('recOverlay')">Cancel</button>
@@ -546,6 +582,11 @@ textarea{resize:vertical;min-height:65px;}
         <button class="add-custom-btn" onclick="addCustomRecType()">+ Add</button>
       </div>
     </div>
+    <div class="settings-section">
+      <div class="settings-label">Tag Manager</div>
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Rename or delete tags across all transactions.</p>
+      <button class="add-custom-btn" onclick="openTagManager()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)">🏷 Manage Tags</button>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('settingsOverlay')">Cancel</button>
       <button class="btn-save bs-set" onclick="saveSettings()">Save Settings</button>
@@ -562,6 +603,19 @@ textarea{resize:vertical;min-height:65px;}
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('budgetOverlay')">Cancel</button>
       <button class="btn-save bs-set" onclick="saveBudgets()">Save Budgets</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- TAG MANAGER MODAL -->
+<div class="modal-overlay" id="tagMgrOverlay" onclick="outerClose(event,'tagMgrOverlay')">
+  <div class="modal" style="width:520px">
+    <div class="modal-title mt-set">🏷 Tag Manager</div>
+    <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Rename or delete tags. Changes apply across all transactions.</p>
+    <div style="display:flex;flex-direction:column;gap:8px" id="tagMgrList"></div>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn-cancel" onclick="closeModal('tagMgrOverlay')">Close</button>
     </div>
   </div>
 </div>
@@ -588,7 +642,8 @@ window.toggleTheme=function(){
  'outerClose','setFilter','openExpModal','openEditExp','saveExp','delExp','openRecModal','openEditRec',
  'saveRec','delRec','renderExpTab','renderRecTab','openSettings','saveSettings','openBudgetModal',
  'saveBudgets','addCustomCat','addCustomRecType','toggleSplit','onAmtChange','savePerson','settleUp',
- 'openPersonHistory','settleUpFromHistory','deletePerson'
+ 'openPersonHistory','settleUpFromHistory','deletePerson',
+ 'setTagFilter','clearTagFilters','removeTagFromExp','removeTagFromRec','openTagManager','renameTag','deleteTag'
 ].forEach(fn=>{window[fn]=function(...a){if(window['_'+fn])return window['_'+fn](...a);};});
 </script>
 
@@ -622,12 +677,13 @@ const DEFAULT_REC_TYPES=[
 ];
 const PAYS={'Credit Card':{c:'#5b9bd5',i:'💳'},'Cash':{c:'#4caf7d',i:'💵'},'UPI':{c:'#9b72cf',i:'📱'}};
 const RVIAS={'UPI':{c:'#9b72cf',i:'📱'},'Bank Transfer':{c:'#5b9bd5',i:'🏦'},'Cash':{c:'#4caf7d',i:'💵'},'Cheque':{c:'#c8a96e',i:'📄'},'Credit Card':{c:'#e05c5c',i:'💳'}};
+const TAG_COLORS=['#e05c5c','#e8834a','#f5c842','#4caf7d','#26c6da','#5b9bd5','#9b72cf','#e91e8c','#78909c','#c8a96e','#66bb6a','#ef5350'];
 const PERSON_COLORS=['#e05c5c','#5b9bd5','#4caf7d','#9b72cf','#c8a96e','#e8834a','#42a5f5','#26c6da','#f48fb1','#78909c'];
 
 // ── STATE ────────────────────────────────────────────────────────
-let expenses=[],received=[],people=[],splits=[],tab='expenses',filter='all';
+let expenses=[],received=[],people=[],splits=[],tags=[],tab='expenses',filter='all',activeTagFilters=[];
 let editEId=null,editRId=null,saving=false,curDate=new Date(),currentUser=null;
-let unsubExp=null,unsubRec=null,unsubPeople=null,unsubSplits=null;
+let unsubExp=null,unsubRec=null,unsubPeople=null,unsubSplits=null,unsubTags=null;
 let userProfile={name:'',tagline:'Track every rupee, own your story',customCats:[],customRecTypes:[],budgets:{}};
 let histPersonId=null; // which person is open in history modal
 
@@ -646,6 +702,8 @@ const peopleCol=()=>collection(db,`users/${currentUser.uid}/people`);
 const personDocR=id=>doc(db,`users/${currentUser.uid}/people/${id}`);
 const splitsCol=()=>collection(db,`users/${currentUser.uid}/splits`);
 const splitDocR=id=>doc(db,`users/${currentUser.uid}/splits/${id}`);
+const tagsCol=()=>collection(db,`users/${currentUser.uid}/tags`);
+const tagDocR=id=>doc(db,`users/${currentUser.uid}/tags/${id}`);
 
 // ── UTILS ────────────────────────────────────────────────────────
 const fmt=n=>'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -694,8 +752,8 @@ onAuthStateChanged(auth,user=>{
     document.getElementById('syncStatus').style.display='none';
     document.getElementById('signInBtn').textContent='🔓 Sign In';
     document.getElementById('signInBtn').disabled=false;
-    if(unsubExp)unsubExp();if(unsubRec)unsubRec();if(unsubPeople)unsubPeople();if(unsubSplits)unsubSplits();
-    expenses=[];received=[];people=[];splits=[];
+    if(unsubExp)unsubExp();if(unsubRec)unsubRec();if(unsubPeople)unsubPeople();if(unsubSplits)unsubSplits();if(unsubTags)unsubTags();
+    expenses=[];received=[];people=[];splits=[];tags=[];activeTagFilters=[];
   }
 });
 
@@ -768,6 +826,7 @@ function startListeners(){
   unsubRec=onSnapshot(query(recCol(),orderBy('date','desc')),snap=>{received=snap.docs.map(d=>({id:d.id,...d.data()}));loadedRec=true;checkLoaded();if(loadedExp&&loadedProfile&&loadedPeople&&loadedSplits)renderAll();},()=>{setSyncStatus('err','Sync error');document.getElementById('loadScreen').style.display='none';});
   unsubPeople=onSnapshot(query(peopleCol()),snap=>{people=snap.docs.map(d=>({id:d.id,...d.data()}));loadedPeople=true;checkLoaded();if(loadedExp&&loadedRec&&loadedProfile&&loadedSplits)renderAll();});
   unsubSplits=onSnapshot(query(splitsCol()),snap=>{splits=snap.docs.map(d=>({id:d.id,...d.data()}));loadedSplits=true;checkLoaded();if(loadedExp&&loadedRec&&loadedProfile&&loadedPeople)renderAll();});
+  unsubTags=onSnapshot(query(tagsCol()),snap=>{tags=snap.docs.map(d=>({id:d.id,...d.data()}));if(loadedExp&&loadedRec&&loadedProfile&&loadedPeople&&loadedSplits)renderAll();});
 }
 
 // ── NAV ──────────────────────────────────────────────────────────
@@ -947,6 +1006,160 @@ function getSplitData(){
   return result;
 }
 
+
+// ── TAGS ─────────────────────────────────────────────────────────
+function tagColor(name){
+  const found=tags.find(t=>t.name===name);
+  if(found)return found.color;
+  // deterministic color from name hash
+  let h=0;for(let i=0;i<name.length;i++)h=(h*31+name.charCodeAt(i))>>>0;
+  return TAG_COLORS[h%TAG_COLORS.length];
+}
+function allTagNames(){return tags.map(t=>t.name).sort();}
+async function ensureTag(name){
+  if(!tags.find(t=>t.name===name)){
+    const color=tagColor(name);
+    await addDoc(tagsCol(),{name,color,createdAt:new Date().toISOString()});
+  }
+}
+function renderTagChips(selectedTags,onRemove,containerId){
+  const el=document.getElementById(containerId);
+  if(!el)return;
+  el.innerHTML=selectedTags.map(t=>`<span class="tag-chip" style="background:${tagColor(t)}">${esc(t)}<span class="tag-x" onclick="${onRemove}('${esc(t)}')">✕</span></span>`).join('');
+}
+function buildTagInputHTML(inputId,chipsId,dropId,onRemoveFn){
+  const existing=allTagNames();
+  return `<div class="tag-input-wrap">
+    <div class="tag-chips-row" id="${chipsId}"></div>
+    <div class="tag-input-row" style="position:relative">
+      <input type="text" id="${inputId}" placeholder="Add tag… (type or pick)" autocomplete="off"
+        oninput="showTagDrop('${inputId}','${dropId}')"
+        onkeydown="tagInputKey(event,'${inputId}','${chipsId}','${dropId}','${onRemoveFn}')">
+      <div class="tag-dropdown" id="${dropId}" style="display:none"></div>
+    </div>
+  </div>`;
+}
+window.showTagDrop=function(inputId,dropId){
+  const val=(document.getElementById(inputId)?.value||'').toLowerCase().trim();
+  const drop=document.getElementById(dropId);if(!drop)return;
+  const selected=getSelectedTags(inputId);
+  const matches=allTagNames().filter(n=>!selected.includes(n)&&(!val||n.toLowerCase().includes(val)));
+  if(!matches.length){drop.style.display='none';return;}
+  drop.innerHTML=matches.map(n=>`<div class="tag-dropdown-item" onmousedown="pickTag('${inputId}',this,'${dropId}')"><div class="tag-dot-sm" style="background:${tagColor(n)}"></div>${esc(n)}</div>`).join('');
+  drop.style.display='block';
+};
+window.pickTag=function(inputId,el,dropId){
+  const name=el.textContent.trim();
+  addTagToInput(inputId,name);
+  document.getElementById(dropId).style.display='none';
+  document.getElementById(inputId).value='';
+};
+window.tagInputKey=function(e,inputId,chipsId,dropId,onRemoveFn){
+  if(e.key==='Enter'||e.key===','){
+    e.preventDefault();
+    const val=(document.getElementById(inputId)?.value||'').trim().replace(/,$/,'');
+    if(val){addTagToInput(inputId,val);document.getElementById(inputId).value='';}
+    document.getElementById(dropId).style.display='none';
+  } else if(e.key==='Escape'){
+    document.getElementById(dropId).style.display='none';
+  }
+};
+// each modal stores its current tags in a module var
+let expModalTags=[],recModalTags=[];
+function addTagToInput(inputId,name){
+  if(!name)return;
+  if(inputId==='fTagInput'&&!expModalTags.includes(name)){expModalTags.push(name);refreshExpTagChips();}
+  if(inputId==='rTagInput'&&!recModalTags.includes(name)){recModalTags.push(name);refreshRecTagChips();}
+}
+function refreshExpTagChips(){
+  const el=document.getElementById('expTagChips');
+  if(el)el.innerHTML=expModalTags.map(t=>`<span class="tag-chip" style="background:${tagColor(t)}">${esc(t)}<span class="tag-x" onclick="removeExpTag('${esc(t)}')">✕</span></span>`).join('');
+}
+function refreshRecTagChips(){
+  const el=document.getElementById('recTagChips');
+  if(el)el.innerHTML=recModalTags.map(t=>`<span class="tag-chip" style="background:${tagColor(t)}">${esc(t)}<span class="tag-x" onclick="removeRecTag('${esc(t)}')">✕</span></span>`).join('');
+}
+window.removeExpTag=t=>{expModalTags=expModalTags.filter(x=>x!==t);refreshExpTagChips();};
+window.removeRecTag=t=>{recModalTags=recModalTags.filter(x=>x!==t);refreshRecTagChips();};
+window._removeTagFromExp=window.removeExpTag;
+window._removeTagFromRec=window.removeRecTag;
+function getSelectedTags(inputId){return inputId==='fTagInput'?expModalTags:recModalTags;}
+
+// ── TAG FILTER ───────────────────────────────────────────────────
+window._setTagFilter=function(name){
+  if(activeTagFilters.includes(name))activeTagFilters=activeTagFilters.filter(t=>t!==name);
+  else activeTagFilters.push(name);
+  renderAll();
+};
+window._clearTagFilters=function(){activeTagFilters=[];renderAll();};
+function isTagFiltered(){return activeTagFilters.length>0;}
+function getFilteredData(data){
+  if(!isTagFiltered())return data;
+  return data.filter(e=>(e.tags||[]).some(t=>activeTagFilters.includes(t)));
+}
+
+// ── TAG MANAGER ──────────────────────────────────────────────────
+window._openTagManager=function(){renderTagManager();document.getElementById('tagMgrOverlay').classList.add('open');};
+function renderTagManager(){
+  const allUsed={};
+  [...expenses,...received].forEach(e=>(e.tags||[]).forEach(t=>{allUsed[t]=(allUsed[t]||0)+1;}));
+  const list=document.getElementById('tagMgrList');
+  if(!list)return;
+  if(!tags.length){list.innerHTML='<div style="color:var(--muted);font-size:.85rem;padding:8px 0">No tags yet.</div>';return;}
+  list.innerHTML=tags.map(t=>`
+    <div class="tag-mgr-item">
+      <div class="tag-mgr-dot" style="background:${t.color}"></div>
+      <div class="tag-mgr-name">${esc(t.name)}</div>
+      <div class="tag-mgr-count">${allUsed[t.name]||0} uses</div>
+      <button class="tag-mgr-btn" onclick="promptRenameTag('${t.id}','${esc(t.name)}')">✏ Rename</button>
+      <button class="tag-mgr-btn tag-mgr-del" onclick="deleteTag('${t.id}','${esc(t.name)}')">✕</button>
+    </div>`).join('');
+}
+window.promptRenameTag=function(id,oldName){
+  const newName=prompt(`Rename tag "${oldName}" to:`,oldName);
+  if(!newName||newName.trim()===oldName)return;
+  window._renameTag(id,oldName,newName.trim());
+};
+window._renameTag=async function(id,oldName,newName){
+  if(!newName||newName===oldName)return;
+  setSyncStatus('syncing','Renaming tag…');
+  try{
+    const batch=writeBatch(db);
+    batch.update(tagDocR(id),{name:newName});
+    // update all expenses that carry oldName
+    expenses.filter(e=>(e.tags||[]).includes(oldName)).forEach(e=>{
+      const newTags=e.tags.map(t=>t===oldName?newName:t);
+      batch.update(expDocR(e.id),{tags:newTags});
+    });
+    // update all received that carry oldName
+    received.filter(e=>(e.tags||[]).includes(oldName)).forEach(e=>{
+      const newTags=e.tags.map(t=>t===oldName?newName:t);
+      batch.update(recDocR(e.id),{tags:newTags});
+    });
+    await batch.commit();
+    // update active filter if renamed
+    if(activeTagFilters.includes(oldName)){activeTagFilters=activeTagFilters.map(t=>t===oldName?newName:t);}
+    toast(`✓ Renamed "${oldName}" → "${newName}"`);
+    renderTagManager();
+  }catch(e){toast('❌ Rename failed','#e05c5c');console.error(e);}
+};
+window._deleteTag=async function(id,name){
+  const count=[...expenses,...received].filter(e=>(e.tags||[]).includes(name)).length;
+  if(!confirm(`Remove tag "${name}" from ${count} transaction${count!==1?'s':''}? This cannot be undone.`))return;
+  setSyncStatus('syncing','Deleting tag…');
+  try{
+    const batch=writeBatch(db);
+    batch.delete(tagDocR(id));
+    expenses.filter(e=>(e.tags||[]).includes(name)).forEach(e=>batch.update(expDocR(e.id),{tags:e.tags.filter(t=>t!==name)}));
+    received.filter(e=>(e.tags||[]).includes(name)).forEach(e=>batch.update(recDocR(e.id),{tags:e.tags.filter(t=>t!==name)}));
+    await batch.commit();
+    activeTagFilters=activeTagFilters.filter(t=>t!==name);
+    toast(`🗑 Tag "${name}" removed`);
+    renderTagManager();
+  }catch(e){toast('❌ Delete failed','#e05c5c');console.error(e);}
+};
+window.deleteTag=window._deleteTag;
+
 // ── EXPENSE CRUD ─────────────────────────────────────────────────
 function buildCatSelect(selId,val){const sel=document.getElementById(selId);sel.innerHTML=allCats().map(c=>`<option value="${esc(c.name)}"${c.name===val?' selected':''}>${c.i} ${c.name}</option>`).join('');}
 function buildRecTypeSelect(selId,val){const sel=document.getElementById(selId);sel.innerHTML=allRecTypes().map(c=>`<option value="${esc(c.name)}"${c.name===val?' selected':''}>${c.i} ${c.name}</option>`).join('');}
@@ -955,7 +1168,7 @@ function buildAdjustPersonSelect(val){
   sel.innerHTML=`<option value="">— No adjustment —</option>`+people.map(p=>`<option value="${p.id}"${p.id===val?' selected':''}>${p.name}</option>`).join('');
 }
 
-function openExpModal(reset){
+function openExpModal(reset,preTags){
   editEId=null;
   if(reset){
     document.getElementById('expTitle').textContent='Add Expense';
@@ -964,9 +1177,14 @@ function openExpModal(reset){
     document.getElementById('fPay').value='UPI';document.getElementById('fNotes').value='';
     document.getElementById('splitCheck').checked=false;
     document.getElementById('splitSection').className='split-section';
+    expModalTags=[...(preTags||[])];
   }
   buildCatSelect('fCat',reset?'Food':document.getElementById('fCat').value);
   renderSplitPeople();
+  // build tag input
+  const wrap=document.getElementById('expTagInputWrap');
+  if(wrap)wrap.innerHTML=buildTagInputHTML('fTagInput','expTagChips','fTagDrop','removeExpTag');
+  refreshExpTagChips();
   document.getElementById('expOverlay').classList.add('open');
 }
 window._openExpModal=openExpModal;
@@ -979,6 +1197,7 @@ window._openEditExp=function(id){
   document.getElementById('fDate').value=e.date;
   document.getElementById('fPay').value=e.payment;
   document.getElementById('fNotes').value=e.notes||'';
+  expModalTags=[...(e.tags||[])];
   buildCatSelect('fCat',e.category);
   // Pre-populate existing splits for this expense
   const existingSplits=splits.filter(s=>s.expenseId===id&&!s.settled);
@@ -986,6 +1205,9 @@ window._openEditExp=function(id){
   document.getElementById('splitCheck').checked=hasSplits;
   document.getElementById('splitSection').className='split-section'+(hasSplits?' open':'');
   renderSplitPeople(existingSplits);
+  const ewrap=document.getElementById('expTagInputWrap');
+  if(ewrap)ewrap.innerHTML=buildTagInputHTML('fTagInput','expTagChips','fTagDrop','removeExpTag');
+  refreshExpTagChips();
   document.getElementById('expOverlay').classList.add('open');
 };
 window._saveExp=async function(){
@@ -995,9 +1217,12 @@ window._saveExp=async function(){
   const splitData=getSplitData();
   const splitTotal=splitData.reduce((s,x)=>s+x.amount,0);
   if(splitData.length&&splitTotal>amount+0.01){toast('⚠ Split amounts exceed total expense.','#e05c5c');return;}
+  const savedTags=[...expModalTags];
   const btn=document.getElementById('expSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
   try{
-    const data={desc,amount,date,category,payment,notes,hasSplit:splitData.length>0};
+    // ensure all tags exist in tags collection
+    for(const t of savedTags)await ensureTag(t);
+    const data={desc,amount,date,category,payment,notes,tags:savedTags,hasSplit:splitData.length>0};
     let expId;
     if(editEId){
       await updateDoc(expDocR(editEId),data);
@@ -1064,9 +1289,13 @@ function openRecModal(reset){
     document.getElementById('recTitle').textContent='Add Received Payment';
     ['rDesc','rFrom','rNotes'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('rAmt').value='';document.getElementById('rDate').value=new Date().toISOString().split('T')[0];document.getElementById('rVia').value='UPI';
+    recModalTags=[];
   }
   buildRecTypeSelect('rType',reset?'Reimbursement':document.getElementById('rType').value);
   buildAdjustPersonSelect('');
+  const rwrap=document.getElementById('recTagInputWrap');
+  if(rwrap)rwrap.innerHTML=buildTagInputHTML('rTagInput','recTagChips','rTagDrop','removeRecTag');
+  refreshRecTagChips();
   document.getElementById('recOverlay').classList.add('open');
 }
 window._openRecModal=openRecModal;
@@ -1076,16 +1305,22 @@ window._openEditRec=function(id){
   document.getElementById('rDesc').value=e.desc;document.getElementById('rFrom').value=e.from||'';
   document.getElementById('rAmt').value=e.amount;document.getElementById('rDate').value=e.date;
   document.getElementById('rVia').value=e.via;document.getElementById('rNotes').value=e.notes||'';
+  recModalTags=[...(e.tags||[])];
   buildRecTypeSelect('rType',e.type);buildAdjustPersonSelect(e.adjustedPersonId||'');
+  const rwrap2=document.getElementById('recTagInputWrap');
+  if(rwrap2)rwrap2.innerHTML=buildTagInputHTML('rTagInput','recTagChips','rTagDrop','removeRecTag');
+  refreshRecTagChips();
   document.getElementById('recOverlay').classList.add('open');
 };
 window._saveRec=async function(){
   if(saving)return;
   const desc=document.getElementById('rDesc').value.trim(),from=document.getElementById('rFrom').value.trim(),amount=parseFloat(document.getElementById('rAmt').value),date=document.getElementById('rDate').value,type=document.getElementById('rType').value,via=document.getElementById('rVia').value,notes=document.getElementById('rNotes').value.trim(),adjustedPersonId=document.getElementById('rAdjustPerson').value;
   if(!desc||!amount||!date||isNaN(amount)||amount<=0){toast('⚠ Fill all required fields.','#e05c5c');return;}
+  const savedRecTags=[...recModalTags];
   const btn=document.getElementById('recSaveBtn');btn.textContent='Saving…';btn.disabled=true;saving=true;setSyncStatus('syncing','Saving…');
   try{
-    const data={desc,from,amount,date,type,via,notes,adjustedPersonId};
+    for(const t of savedRecTags)await ensureTag(t);
+    const data={desc,from,amount,date,type,via,notes,adjustedPersonId,tags:savedRecTags};
     if(editRId){await updateDoc(recDocR(editRId),data);toast('✓ Payment updated','#4caf7d');}
     else{
       await addDoc(recCol(),data);
@@ -1143,6 +1378,9 @@ window._saveBudgets=async function(){
 function renderAll(){
   const M=['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('currentMonth').textContent=M[curDate.getMonth()]+' '+curDate.getFullYear();
+  // hide month nav when tag filter active (shows all-time)
+  const monthNav=document.getElementById('monthNav');
+  if(monthNav&&tab!=='people')monthNav.style.display=isTagFiltered()?'none':'flex';
   renderSidebar();
   if(tab==='expenses')renderExpTab();
   else if(tab==='received')renderRecTab();
@@ -1160,6 +1398,7 @@ function renderSidebar(){
   document.getElementById('netAmt').style.color=net>=0?'var(--green)':'var(--red)';
   document.getElementById('netLabel').textContent=net>=0?'surplus this month':'deficit this month';
   renderInsights(ed,spent);
+  renderTagSidebar();
   if(tab==='expenses')renderExpSidebar(ed);
   else if(tab==='received')renderRecSidebar(rd);
   else renderPeopleSidebar();
@@ -1178,6 +1417,34 @@ function renderInsights(ed,spent){
   if(totalOwed>0)insights.push(`<div class="insight-row"><span class="insight-icon">🤝</span><span class="insight-neutral">People owe you <strong>${fmt(totalOwed)}</strong> total</span></div>`);
   if(!insights.length)insights.push(`<div class="insight-row"><span class="insight-icon">✨</span><span class="insight-neutral">Add expenses to see insights</span></div>`);
   document.getElementById('insightsBody').innerHTML=insights.join('');
+}
+function renderTagSidebar(){
+  // Build tag totals across all data (or current month if no filter)
+  const allData=isTagFiltered()?[...expenses,...received]:[...getMonthExp(),...getMonthRec()];
+  const tagTotals={};
+  allData.forEach(e=>(e.tags||[]).forEach(t=>{
+    if(!tagTotals[t])tagTotals[t]={exp:0,rec:0};
+    if(e.category!==undefined)tagTotals[t].exp+=Number(e.amount);
+    else tagTotals[t].rec+=Number(e.amount);
+  }));
+  const sorted=Object.entries(tagTotals).sort((a,b)=>(b[1].exp+b[1].rec)-(a[1].exp+a[1].rec));
+  const container=document.getElementById('tagSidebarBody');
+  if(!container)return;
+  if(!sorted.length){container.innerHTML='<div style="color:var(--muted);font-size:.82rem">No tagged transactions'+(isTagFiltered()?'':' this month')+'.</div>';return;}
+  container.innerHTML=sorted.map(([name,v])=>{
+    const total=v.exp+v.rec;
+    const color=tagColor(name);
+    return`<div class="cat-bar-wrap" style="cursor:pointer" onclick="setTagFilter('${esc(name)}')"">
+      <div class="cat-bar-header">
+        <span class="cat-bar-name"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px"></span>${esc(name)}</span>
+        <span class="cat-bar-amount">${fmt(total)}</span>
+      </div>
+      <div style="display:flex;gap:6px;font-size:.7rem;color:var(--muted);margin-top:2px">
+        ${v.exp?`<span style="color:var(--red)">spent ${fmt(v.exp)}</span>`:''}
+        ${v.rec?`<span style="color:var(--green)">received ${fmt(v.rec)}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderExpSidebar(ed){
@@ -1226,15 +1493,34 @@ function renderPeopleSidebar(){
 
 // ── EXP / REC TABS ───────────────────────────────────────────────
 function buildFilters(btns){
-  return btns.map(b=>`<button class="filter-btn ${filter===b.v?'active'+(b.g?' ga':''):''}" onclick="setFilter('${b.v}')">${b.l}</button>`).join('')+
-  `<div class="search-box"><input type="text" id="si" placeholder="Search…" oninput="tab==='expenses'?window._renderExpTab():window._renderRecTab()" value="${esc(document.getElementById('si')?.value||'')}"></div>`;
+  const payRow=btns.map(b=>`<button class="filter-btn ${filter===b.v?'active'+(b.g?' ga':''):''}" onclick="setFilter('${b.v}')">${b.l}</button>`).join('');
+  const searchBox=`<div class="search-box"><input type="text" id="si" placeholder="Search…" oninput="tab==='expenses'?window._renderExpTab():window._renderRecTab()" value="${esc(document.getElementById('si')?.value||'')}"></div>`;
+  // tag filter row
+  const tagRow=buildTagFilterRow();
+  // cross-month banner
+  const banner=isTagFiltered()?buildTagBanner():'';
+  return payRow+searchBox+(tagRow?`<div style="width:100%;margin-top:2px">${banner}${tagRow}</div>`:'');
+}
+function buildTagFilterRow(){
+  if(!tags.length)return'';
+  return'<div class="tag-filter-row">'+tags.map(t=>{
+    const active=activeTagFilters.includes(t.name);
+    return`<button class="tag-filter-btn" style="color:${t.color};border-color:${t.color}22;background:${active?t.color:'transparent'}" onclick="setTagFilter('${esc(t.name)}')">${active?'✓ ':''}<span style="${active?'':''}">🏷 ${esc(t.name)}</span></button>`;
+  }).join('')+'</div>';
+}
+function buildTagBanner(){
+  const src=isTagFiltered()?[...expenses,...received].filter(e=>(e.tags||[]).some(t=>activeTagFilters.includes(t))):[];
+  const totalExp=src.filter(e=>'payment' in e===false&&'category' in e).reduce((s,e)=>s+Number(e.amount),0);
+  const total=src.length;
+  const names=activeTagFilters.join(' + ');
+  return`<div class="tag-banner"><span class="tag-banner-label">Showing tag:</span><span class="tag-banner-name">🏷 ${esc(names)}</span><span class="tag-banner-meta">${total} entries</span><button class="tag-banner-clear" onclick="clearTagFilters()">✕ Clear</button></div>`;
 }
 
 function renderExpTab(){
   document.getElementById('filtersBar').innerHTML=buildFilters([{v:'all',l:'All'},{v:'Credit Card',l:'💳 Card'},{v:'Cash',l:'💵 Cash'},{v:'UPI',l:'📱 UPI'}]);
   document.getElementById('mainContent').innerHTML='<div class="expense-table"><table><thead id="tHead"></thead><tbody id="tBody"></tbody></table></div>';
   document.getElementById('tHead').innerHTML='<tr><th>Description</th><th>Category</th><th>Payment</th><th>Date</th><th style="text-align:right">Amount</th><th></th></tr>';
-  let data=getMonthExp();
+  let data=isTagFiltered()?getFilteredData(expenses):getMonthExp();
   const s=(document.getElementById('si')?.value||'').toLowerCase();
   if(filter!=='all')data=data.filter(e=>e.payment===filter);
   if(s)data=data.filter(e=>e.desc.toLowerCase().includes(s)||e.category.toLowerCase().includes(s)||(e.notes||'').toLowerCase().includes(s));
@@ -1245,7 +1531,8 @@ function renderExpTab(){
     const cat=cm[e.category]||{c:'#6b6b6b',i:'📌'},pay=PAYS[e.payment]||PAYS['UPI'];
     const ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     const splitChip=e.hasSplit?`<span class="split-chip">🤝 Split</span>`:'';
-    return`<tr><td><div class="exp-desc">${esc(e.desc)}${splitChip}${e.notes?'<span class="note-dot">📎</span>':''}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="cat-chip"><span class="cat-dot" style="background:${cat.c}"></span>${e.category}</span></td><td><span class="pay-chip" style="background:${pay.c}22;color:${pay.c}">${pay.i} ${e.payment}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-red">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditExp('${e.id}')">✏</button><button class="del-btn" onclick="delExp('${e.id}')">✕</button></div></td></tr>`;
+    const tagHtml=(e.tags||[]).map(t=>`<span class="tag-chip" style="background:${tagColor(t)}">${esc(t)}</span>`).join('');
+    return`<tr><td><div class="exp-desc">${esc(e.desc)}${splitChip}${e.notes?'<span class="note-dot">📎</span>':''}</div>${tagHtml?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${tagHtml}</div>`:''} ${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="cat-chip"><span class="cat-dot" style="background:${cat.c}"></span>${e.category}</span></td><td><span class="pay-chip" style="background:${pay.c}22;color:${pay.c}">${pay.i} ${e.payment}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-red">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditExp('${e.id}')">✏</button><button class="del-btn" onclick="delExp('${e.id}')">✕</button></div></td></tr>`;
   }).join('');
 }
 
@@ -1254,7 +1541,7 @@ function renderRecTab(){
   document.getElementById('filtersBar').innerHTML=buildFilters([{v:'all',l:'All',g:true},...Object.keys(rtm).map(n=>({v:n,l:rtm[n].i+' '+n.split(' ')[0],g:true}))]);
   document.getElementById('mainContent').innerHTML='<div class="expense-table"><table><thead id="tHead"></thead><tbody id="tBody"></tbody></table></div>';
   document.getElementById('tHead').innerHTML='<tr><th>Description</th><th>From</th><th>Type</th><th>Via</th><th>Date</th><th style="text-align:right">Amount</th><th></th></tr>';
-  let data=received.filter(e=>e.date.startsWith(mkey(curDate)));
+  let data=isTagFiltered()?getFilteredData(received):received.filter(e=>e.date.startsWith(mkey(curDate)));
   const s=(document.getElementById('si')?.value||'').toLowerCase();
   if(filter!=='all')data=data.filter(e=>e.type===filter);
   if(s)data=data.filter(e=>e.desc.toLowerCase().includes(s)||(e.from||'').toLowerCase().includes(s));
@@ -1266,7 +1553,8 @@ function renderRecTab(){
     const ds=new Date(e.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     const adjP=e.adjustedPersonId?people.find(p=>p.id===e.adjustedPersonId):null;
     const adjChip=adjP?`<span class="split-chip">↔ ${esc(adjP.name)}</span>`:'';
-    return`<tr><td><div class="exp-desc">${esc(e.desc)}${adjChip}${e.notes?'<span class="note-dot">📎</span>':''}</div>${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="from-chip">👤 ${esc(e.from||'—')}</span></td><td><span class="cat-chip"><span class="cat-dot" style="background:${rt.c}"></span>${e.type}</span></td><td><span class="pay-chip" style="background:${rv.c}22;color:${rv.c}">${rv.i} ${e.via}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-grn">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditRec('${e.id}')">✏</button><button class="del-btn" onclick="delRec('${e.id}')">✕</button></div></td></tr>`;
+    const rTagHtml=(e.tags||[]).map(t=>`<span class="tag-chip" style="background:${tagColor(t)}">${esc(t)}</span>`).join('');
+    return`<tr><td><div class="exp-desc">${esc(e.desc)}${adjChip}${e.notes?'<span class="note-dot">📎</span>':''}</div>${rTagHtml?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${rTagHtml}</div>`:''} ${e.notes?`<div class="exp-note">${esc(e.notes)}</div>`:''}</td><td><span class="from-chip">👤 ${esc(e.from||'—')}</span></td><td><span class="cat-chip"><span class="cat-dot" style="background:${rt.c}"></span>${e.type}</span></td><td><span class="pay-chip" style="background:${rv.c}22;color:${rv.c}">${rv.i} ${e.via}</span></td><td><span class="exp-date">${ds}</span></td><td style="text-align:right"><span class="amt-grn">${fmt(e.amount)}</span></td><td><div class="row-actions"><button class="edit-btn" onclick="openEditRec('${e.id}')">✏</button><button class="del-btn" onclick="delRec('${e.id}')">✕</button></div></td></tr>`;
   }).join('');
 }
 
