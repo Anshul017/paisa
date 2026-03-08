@@ -2,7 +2,7 @@
 
 > *Track every rupee, own your story*
 
-A personal expense manager web app with real-time cloud sync, multi-user support, and a clean dark/light UI. Built as a single HTML file — no frameworks, no build process.
+A personal expense manager web app with real-time cloud sync, multi-user support, split expenses with friends, and a clean dark/light UI. Built as a single HTML file — no frameworks, no build process.
 
 🔗 **Live App:** [your-username.github.io/paisa](https://your-username.github.io/paisa)
 
@@ -23,17 +23,35 @@ A personal expense manager web app with real-time cloud sync, multi-user support
 - 3 payment methods: Credit Card, Cash, UPI
 - Filter by payment method, search by text
 - 📎 Notes indicator on rows that have notes
+- 🤝 Split chip shown on expenses that have been split
 
 ### 🟢 Received Payments
 - Add / Edit / Delete received payment entries
 - Fields: Description, From (person/org), Amount, Date, Type, Via, Notes
 - 4 default types + custom user-defined types
 - 5 received via options: UPI, Bank Transfer, Cash, Cheque, Credit Card
+- Optionally link a received payment to a person to auto-reduce their balance
+
+### 👥 People & Split Expenses
+- Add people (name + optional phone number)
+- Split any expense with one or more people with **custom amounts per person**
+- Live counter while splitting shows remaining amount (your share)
+- People tab shows each person's outstanding balance:
+  - 🟢 They owe you
+  - 🔴 You owe them
+  - ✓ Settled
+- Net banner showing total owed to you vs total you owe across all people
+- **Full transaction history** per person — every split and payment listed
+- **Settle Up** button — marks all dues with a person as cleared in one click
+- **Delete expense** → associated split dues removed automatically
+- **Edit expense** → old splits cleared, re-split with new amounts
+- **Block person deletion** if they have unsettled dues — must settle up first
+- Sidebar shows people summary and per-person balance bars
 
 ### 📊 Dashboard & Insights
 - Personalised greeting: *Good morning/afternoon/evening, [Name] 👋*
 - Monthly summary: Total Spent, Total Received, Net Balance
-- Monthly Insights: % change vs last month, top category, budget warnings
+- Monthly Insights: % change vs last month, top category, budget warnings, total owed by people
 - Payment method breakdown with amounts
 - Category breakdown with animated progress bars
 - Month navigation (browse any past/future month)
@@ -116,6 +134,8 @@ service cloud.firestore {
 }
 ```
 
+> The `{document=**}` wildcard covers ALL sub-collections automatically — expenses, received, profile, people, and splits are all covered by this single rule. No rule changes needed when adding new collections.
+
 ---
 
 ## 🗄️ Firestore Data Structure
@@ -126,10 +146,26 @@ users/
     profile/
       info          → { name, email, tagline, customCats[], customRecTypes[], budgets{}, createdAt }
     expenses/
-      {id}          → { desc, amount, date, category, payment, notes }
+      {id}          → { desc, amount, date, category, payment, notes, hasSplit }
     received/
-      {id}          → { desc, from, amount, date, type, via, notes }
+      {id}          → { desc, from, amount, date, type, via, notes, adjustedPersonId }
+    people/
+      {id}          → { name, phone, createdAt }
+    splits/
+      {id}          → { personId, amount, desc, date, expenseId, type, settled, createdAt, settledAt? }
 ```
+
+### Split document types
+| `type` field | Meaning | Effect on balance |
+|---|---|---|
+| `split` | Person owes you their share of an expense | `+amount` (they owe you) |
+| `payment` | You received money from this person | `-amount` (reduces what they owe) |
+
+### Balance calculation
+`computeBalances()` sums all **unsettled** split documents per person:
+- Positive balance = they owe you
+- Negative balance = you owe them
+- Zero = settled
 
 > **Migration note:** Old data (pre-multi-user) was stored at top-level `/expenses` and `/received`. A one-time auto-migration runs on first login, copying docs to the user's folder and marking originals with `_migrated: true`.
 
@@ -143,6 +179,7 @@ If you are an AI assistant helping to update this app, here is everything you ne
 - The **entire app is one file**: `index.html`
 - No build process — edit and upload directly to GitHub
 - Firebase credentials are embedded — do not change them
+- `renderedPeople` is a module-level array that mirrors `people` at the time the split modal opens — used to map checkbox index → person
 
 ### JavaScript Pattern
 All functions exposed to HTML `onclick` attributes follow this pattern to avoid timing issues with ES module loading:
@@ -157,7 +194,7 @@ window.fnName = function(...args) {
 window._fnName = function() { /* actual implementation */ };
 ```
 
-> `switchAuthTab` is an exception — it is pure DOM and defined directly in the regular script block.
+> `switchAuthTab` and `toggleTheme` are exceptions — pure DOM, defined directly in the regular script block.
 
 ### Key Paths
 | What | Path |
@@ -165,21 +202,45 @@ window._fnName = function() { /* actual implementation */ };
 | User expenses | `users/{uid}/expenses/{id}` |
 | User received | `users/{uid}/received/{id}` |
 | User profile | `users/{uid}/profile/info` |
+| People | `users/{uid}/people/{id}` |
+| Splits | `users/{uid}/splits/{id}` |
 | Custom categories | `profile.customCats[]` → `{ name, i (emoji), c (hex color) }` |
 | Budgets | `profile.budgets{}` → `{ categoryName: amount }` |
 | Theme preference | `localStorage` key: `paisa_theme` → `"dark"` or `"light"` |
 
+### Split UI — How It Works
+- Checkbox IDs: `sc_0`, `sc_1`, `sc_2` … (index-based, NOT Firestore doc IDs)
+- Amount input IDs: `sa_0`, `sa_1`, `sa_2` …
+- `renderedPeople[idx]` maps index back to the person object
+- `renderSplitPeople(existingSplits=[])` accepts existing splits to pre-fill on edit
+- `getSplitData()` reads checked checkboxes and their amounts → returns `[{personId, amount}]`
+
+### Split Lifecycle Rules
+| Action | What happens to splits |
+|---|---|
+| Add expense with split | New split docs created in `splits/` collection |
+| Edit expense | All old splits for that `expenseId` deleted, new ones written |
+| Delete expense | All splits for that `expenseId` deleted atomically |
+| Receive payment, link to person | A `type:'payment'` split doc with negative amount is added |
+| Settle Up | All unsettled splits for that person marked `settled: true` |
+| Delete person with balance ≠ 0 | **Blocked** — toast shown, deletion prevented |
+| Delete person with balance = 0 | Person + all their split history deleted cleanly |
+
 ### Bugs Fixed — Do Not Reintroduce
 1. **Empty `catch()` blocks** — always use `catch(e)`, never `catch()` — causes SyntaxError in some browsers
 2. **`window.fn` vs `window._fn` pattern** — HTML onclicks use stubs, module uses `_fn` implementations
-3. **`switchAuthTab` warning** — must stay in regular `<script>`, not inside the ES module
+3. **`switchAuthTab`** — must stay in regular `<script>`, not inside the ES module
 4. **Data migration** — old top-level `/expenses` docs are migrated once on login; do not remove this logic
+5. **Split checkbox double-toggle** — div onclick and checkbox onclick used to fire together, cancelling each other; fixed by checking `event.target`
+6. **Orphan code after replacement** — a previous edit left dead code outside any function causing `Unexpected token '}'`; always verify file after edits
+7. **Firestore ID special chars** — never use Firestore doc IDs as DOM element IDs; use index-based IDs (`sc_0`, `sa_0`) instead
 
 ### How to Deploy a Change
 1. Make the change to `index.html`
 2. Go to `github.com/[username]/paisa`
 3. Click `index.html` → pencil ✏️ icon → paste new content → **Commit changes**
 4. Wait 1–2 minutes → live site updates automatically
+5. If old behaviour persists: **Ctrl+Shift+R** (hard reload) to bypass browser cache
 
 ---
 
@@ -188,7 +249,6 @@ window._fnName = function() { /* actual implementation */ };
 - [ ] Recurring expenses with monthly reminders
 - [ ] Kotak Bank CSV statement import
 - [ ] Yearly summary and analytics view
-- [ ] Bill split / shared expense tracking
 - [ ] Change password from within the app
 
 ---
