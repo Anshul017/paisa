@@ -432,9 +432,9 @@ textarea{resize:vertical;min-height:65px;}
     </div>
     <!-- SPLIT SECTION -->
     <div id="splitToggleWrap" style="margin-top:12px">
-      <div class="split-toggle" onclick="toggleSplit()">
-        <input type="checkbox" id="splitCheck" onclick="event.stopPropagation()">
-        <label for="splitCheck">🤝 Split this expense with people</label>
+      <div class="split-toggle" onclick="if(event.target!==document.getElementById('splitCheck'))toggleSplit()">
+        <input type="checkbox" id="splitCheck" onclick="window._splitCheckDirect&&window._splitCheckDirect()">
+        <label for="splitCheck" onclick="event.preventDefault()">🤝 Split this expense with people</label>
       </div>
       <div class="split-section" id="splitSection">
         <div id="splitPeopleList"></div>
@@ -851,9 +851,20 @@ function renderPersonHistory(personId){
 }
 
 // ── SPLIT UI ─────────────────────────────────────────────────────
+// Use index-based IDs to avoid special chars in Firestore IDs breaking querySelector
+function splitCheckId(idx){return'sc_'+idx;}
+function splitAmtId(idx){return'sa_'+idx;}
+
 window._toggleSplit=function(){
+  // Called only from the div wrapper — manually toggle the checkbox
   const cb=document.getElementById('splitCheck');
   cb.checked=!cb.checked;
+  document.getElementById('splitSection').className='split-section'+(cb.checked?' open':'');
+  if(cb.checked)renderSplitPeople();
+};
+// Called when the checkbox itself is clicked directly (not via the div)
+window._splitCheckDirect=function(){
+  const cb=document.getElementById('splitCheck');
   document.getElementById('splitSection').className='split-section'+(cb.checked?' open':'');
   if(cb.checked)renderSplitPeople();
 };
@@ -861,14 +872,14 @@ window._onAmtChange=function(){if(document.getElementById('splitCheck').checked)
 
 function renderSplitPeople(){
   if(!people.length){document.getElementById('splitPeopleList').innerHTML='<div style="color:var(--muted);font-size:.83rem">No people added yet. Go to 👥 People tab first.</div>';return;}
-  document.getElementById('splitPeopleList').innerHTML=people.map(p=>`
+  document.getElementById('splitPeopleList').innerHTML=people.map((p,idx)=>`
     <div class="split-person-row">
-      <input type="checkbox" class="split-check" id="sc_${p.id}" onchange="window._updateSplitRemaining&&window._updateSplitRemaining()">
+      <input type="checkbox" class="split-check" id="${splitCheckId(idx)}" onchange="updateSplitRemaining()">
       <div class="split-avatar" style="background:${personColor(p.id)}">${(p.name[0]||'?').toUpperCase()}</div>
       <div class="split-name">${esc(p.name)}</div>
-      <div class="aiw" style="position:relative">
+      <div style="position:relative;flex-shrink:0">
         <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:600;pointer-events:none;font-size:.85rem">₹</span>
-        <input type="number" class="split-amt-input" id="sa_${p.id}" placeholder="0" min="0" step="0.01" style="padding-left:26px;width:100px" oninput="window._updateSplitRemaining&&window._updateSplitRemaining()">
+        <input type="number" id="${splitAmtId(idx)}" placeholder="0" min="0" step="0.01" style="padding-left:26px;width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;" oninput="updateSplitRemaining()">
       </div>
     </div>`).join('');
   updateSplitRemaining();
@@ -876,17 +887,23 @@ function renderSplitPeople(){
 function updateSplitRemaining(){
   const total=parseFloat(document.getElementById('fAmt').value)||0;
   let allocated=0;
-  people.forEach(p=>{if(document.getElementById('sc_'+p.id)?.checked)allocated+=parseFloat(document.getElementById('sa_'+p.id)?.value||0)||0;});
+  people.forEach((_,idx)=>{if(document.getElementById(splitCheckId(idx))?.checked)allocated+=parseFloat(document.getElementById(splitAmtId(idx))?.value||0)||0;});
   const rem=total-allocated;
   const el=document.getElementById('splitRemaining');
+  if(!el)return;
   el.className='split-remaining '+(Math.abs(rem)<0.01?'ok':rem<0?'over':'');
   el.textContent=Math.abs(rem)<0.01?`✓ Fully allocated (₹${total.toFixed(2)})`:rem>0?`₹${rem.toFixed(2)} remaining (your share)`:`⚠ Over-allocated by ₹${Math.abs(rem).toFixed(2)}`;
 }
 window._updateSplitRemaining=updateSplitRemaining;
+window.updateSplitRemaining=updateSplitRemaining;
 
 function getSplitData(){
   if(!document.getElementById('splitCheck')?.checked)return[];
-  return people.filter(p=>document.getElementById('sc_'+p.id)?.checked).map(p=>({personId:p.id,amount:parseFloat(document.getElementById('sa_'+p.id)?.value||0)||0})).filter(s=>s.amount>0);
+  return people.map((p,idx)=>({
+    personId:p.id,
+    amount:parseFloat(document.getElementById(splitAmtId(idx))?.value||0)||0,
+    checked:!!document.getElementById(splitCheckId(idx))?.checked
+  })).filter(s=>s.checked&&s.amount>0);
 }
 
 // ── EXPENSE CRUD ─────────────────────────────────────────────────
@@ -943,9 +960,10 @@ window._saveExp=async function(){
         batch.set(ref,{personId:s.personId,amount:s.amount,desc,date,expenseId:expId,type:'split',settled:false,createdAt:new Date().toISOString()});
       });
       await batch.commit();
+      toast(`✓ Expense saved & split with ${splitData.length} person${splitData.length>1?'s':''}!`,'#9b72cf');
     }
     window._closeModal('expOverlay');
-  }catch(err){toast('❌ Save failed','#e05c5c');setSyncStatus('err','Save error');}
+  }catch(err){toast('❌ Save failed: '+err.message,'#e05c5c');setSyncStatus('err','Save error');}
   btn.textContent='Save Expense';btn.disabled=false;saving=false;
 };
 window._delExp=async function(id){
