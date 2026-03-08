@@ -798,9 +798,23 @@ window._savePerson=async function(){
   catch(e){toast('❌ Failed to add person','#e05c5c');}
 };
 window._deletePerson=async function(id){
-  if(!confirm('Delete this person? Their split history will remain but balances will reset.'))return;
-  try{await deleteDoc(personDocR(id));toast('🗑 Person removed');}
-  catch(e){toast('❌ Failed','#e05c5c');}
+  const bal=computeBalances()[id]||0;
+  if(bal!==0){
+    const name=personName(id);
+    const amt=Math.abs(bal).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const dir=bal>0?'owes you':'you owe them';
+    toast(`⚠️ Settle up with ${name} first — ₹${amt} ${dir}`,'#f59e0b');
+    return;
+  }
+  if(!confirm('Delete this person? This cannot be undone.'))return;
+  try{
+    // Also clean up any settled split history for this person
+    const batch=writeBatch(db);
+    batch.delete(personDocR(id));
+    splits.filter(s=>s.personId===id).forEach(s=>batch.delete(splitDocR(s.id)));
+    await batch.commit();
+    toast('🗑 Person removed');
+  }catch(e){toast('❌ Failed to delete','#e05c5c');}
 };
 window._settleUp=async function(personId){
   const bal=computeBalances()[personId];
