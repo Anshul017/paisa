@@ -1883,16 +1883,12 @@ async function processPdf(file,password){
       let lastY=null,lineText='';
       items.forEach(item=>{
         const y=Math.round(item.transform[5]);
-        if(lastY!==null&&Math.abs(y-lastY)>3){fullText+=lineText.trim()+'
-';lineText='';}
+        if(lastY!==null&&Math.abs(y-lastY)>3){fullText+=lineText.trim()+'\n';lineText='';}
         lineText+=(lineText?' ':'')+item.str;
         lastY=y;
       });
-      if(lineText.trim())fullText+=lineText.trim()+'
-';
-      fullText+='
---- PAGE BREAK ---
-';
+      if(lineText.trim())fullText+=lineText.trim()+'\n';
+      fullText+='\n--- PAGE BREAK ---\n';
     }
     if(!fullText.trim()){
       toast('⚠ Could not extract text. The PDF may be scanned/image-based.','#e05c5c');
@@ -2007,15 +2003,20 @@ function buildReviewTable(){
     const ds=r.date?new Date(r.date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}):'—';
     const dupBadge=r._dup?'<span class="imp-dup">⚠ dup?</span>':'';
     const tagVal=(r._tags||[]).join(', ');
-    return`<tr id="impRow${r._id}" class="${r._include?'':'unchecked'}">
-      <td><input type="checkbox" ${r._include?'checked':''} onchange="toggleImpRow(${r._id},this.checked)"></td>
-      <td style="white-space:nowrap;font-size:.78rem">${ds}</td>
-      <td><input type="text" value="${esc(r.description)}" id="impDesc${r._id}" style="min-width:140px"></td>
-      <td class="imp-amt">₹${Number(r.amount).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}${dupBadge}</td>
-      <td><select id="impCat${r._id}" onchange="syncImpRowCat(${r._id})">${allCatsOpts.replace(`value="${esc(r.category)}"`,`value="${esc(r.category)}" selected`)}</select></td>
-      <td><input class="imp-tag-input" type="text" id="impTag${r._id}" value="${esc(tagVal)}" placeholder="tag1, tag2"></td>
-      <td><select id="impPay${r._id}">${payOpts.replace(`value="${esc(r.paymentMethod)}"`,`value="${esc(r.paymentMethod)}" selected`)}</select></td>
-    </tr>`;
+    const catOpts=allCatsOpts.replace('value="'+esc(r.category)+'"','value="'+esc(r.category)+'" selected');
+    const payOptsRow=payOpts.replace('value="'+esc(r.paymentMethod)+'"','value="'+esc(r.paymentMethod)+'" selected');
+    const rowClass=r._include?'':'unchecked';
+    const chk=r._include?'checked':'';
+    const amt='₹'+Number(r.amount).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return'<tr id="impRow'+r._id+'" class="'+rowClass+'">'
+      +'<td><input type="checkbox" '+chk+' onchange="toggleImpRow('+r._id+',this.checked)"></td>'
+      +'<td style="white-space:nowrap;font-size:.78rem">'+ds+'</td>'
+      +'<td><input type="text" value="'+esc(r.description)+'" id="impDesc'+r._id+'" style="min-width:140px"></td>'
+      +'<td class="imp-amt">'+amt+dupBadge+'</td>'
+      +'<td><select id="impCat'+r._id+'" onchange="syncImpRowCat('+r._id+')">'+catOpts+'</select></td>'
+      +'<td><input class="imp-tag-input" type="text" id="impTag'+r._id+'" value="'+esc(tagVal)+'" placeholder="tag1, tag2"></td>'
+      +'<td><select id="impPay'+r._id+'">'+payOptsRow+'</select></td>'
+      +'</tr>';
   }).join('');
   updateImportBtn();
 }
