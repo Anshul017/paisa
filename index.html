@@ -241,6 +241,21 @@ main{max-width:1340px;margin:0 auto;padding:28px 24px;display:grid;grid-template
 .budget-over{background:var(--red-dim);color:var(--red);}
 .cat-bar-track{height:5px;background:var(--surface2);border-radius:99px;overflow:hidden;}
 .cat-bar-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.day-row{border-radius:10px;margin-bottom:8px;overflow:hidden;border:1px solid var(--border);}
+.day-header{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;background:var(--surface2);user-select:none;transition:background .15s;}
+.day-header:hover{background:var(--surface3,var(--border));}
+.day-header-left{display:flex;align-items:baseline;gap:8px;}
+.day-date{font-size:.82rem;font-weight:600;color:var(--text);}
+.day-count{font-size:.71rem;color:var(--muted);}
+.day-total{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--red);font-weight:600;}
+.day-chevron{font-size:.7rem;color:var(--muted);transition:transform .2s;margin-left:6px;}
+.day-chevron.open{transform:rotate(180deg);}
+.day-cats{padding:8px 10px 4px;display:flex;flex-direction:column;gap:5px;background:var(--surface);}
+.day-cat-row{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;}
+.day-cat-name{color:var(--muted);display:flex;align-items:center;gap:5px;}
+.day-cat-amt{font-family:'DM Mono',monospace;color:var(--text);font-size:.75rem;}
+.day-cat-bar{height:3px;border-radius:99px;margin-top:3px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+
 
 /* CONTENT */
 .content{display:flex;flex-direction:column;gap:18px;}
@@ -497,6 +512,10 @@ textarea{resize:vertical;min-height:65px;}
         <button class="icon-btn" onclick="openBudgetModal()" title="Set budgets">💰</button>
       </div>
       <div id="catBreakdown"></div>
+    </div>
+    <div class="card" id="dailyCard" style="display:none">
+      <div class="card-title">📅 Daily Breakdown</div>
+      <div id="dailyBreakdown"></div>
     </div>
   </div>
   <div class="content">
@@ -1620,9 +1639,93 @@ function renderExpSidebar(ed){
     const highlight=isActive?'outline:2px solid var(--accent);outline-offset:2px;border-radius:8px;padding:4px 6px;':'';
     return`<div class="cat-bar-wrap" style="cursor:pointer;${highlight}transition:all .2s" onclick="setCatFilter('${esc(n)}')"><div class="cat-bar-header"><span class="cat-bar-name">${c.i} ${n}</span><div class="cat-bar-right"><span class="cat-bar-amount">${fmt(a)}</span>${badge}</div></div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(a/mx*100).toFixed(1)}%;background:${c.c}"></div></div></div>`;
   }).join(''):'<div style="color:var(--muted);font-size:.83rem">No expenses this month.</div>';
+  renderDailySidebar(ed);
 }
 
+function renderDailySidebar(ed){
+  const card=document.getElementById('dailyCard');
+  const container=document.getElementById('dailyBreakdown');
+  if(!card||!container) return;
+  if(!ed.length){card.style.display='none';return;}
+  card.style.display='';
+
+  // Group by date
+  const byDay={};
+  ed.forEach(function(e){
+    var d=e.date||'';
+    if(!byDay[d]) byDay[d]=[];
+    byDay[d].push(e);
+  });
+
+  // Sort dates descending (most recent first)
+  var dates=Object.keys(byDay).sort(function(a,b){return b.localeCompare(a);});
+  var cm=catMap();
+  var maxDay=Math.max.apply(null,dates.map(function(d){return byDay[d].reduce(function(s,e){return s+Number(e.amount);},0);}));
+
+  container.innerHTML=dates.map(function(d,idx){
+    var exps=byDay[d];
+    var total=exps.reduce(function(s,e){return s+Number(e.amount);},0);
+    var count=exps.length;
+
+    // Build category breakdown for this day
+    var catTotals={};
+    exps.forEach(function(e){catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount);});
+    var catsSorted=Object.entries(catTotals).sort(function(a,b){return b[1]-a[1];});
+    var maxCat=catsSorted[0]?catsSorted[0][1]:1;
+
+    // Format date: "Mon 06" or "Mon 06 Mar" style
+    var parts=d.split('-'); // YYYY-MM-DD
+    var dateObj=new Date(d+'T00:00:00');
+    var dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()];
+    var dayNum=parts[2];
+    var monName=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1])-1];
+    var label=dayName+' '+dayNum+' '+monName;
+
+    // Expanded by default only for top 3 days (by total)
+    var isOpen=idx<3;
+    var uid='day_'+d.replace(/-/g,'');
+
+    var catsHtml=catsSorted.map(function(entry){
+      var n=entry[0],a=entry[1];
+      var ci=cm[n]||{c:'#6b6b6b',i:'📌'};
+      var w=(a/maxCat*100).toFixed(1);
+      return '<div class="day-cat-row">'
+        +'<span class="day-cat-name"><span style="font-size:.85em">'+ci.i+'</span> '+esc(n)+'</span>'
+        +'<span class="day-cat-amt">'+fmt(a)+'</span>'
+        +'</div>'
+        +'<div class="day-cat-bar" style="width:'+w+'%;background:'+ci.c+';max-width:100%"></div>';
+    }).join('');
+
+    return '<div class="day-row">'
+      +'<div class="day-header" onclick="toggleDay(this)" data-uid="'+uid+'">'
+      +'<div class="day-header-left">'
+      +'<span class="day-date">'+label+'</span>'
+      +'<span class="day-count">'+count+' expense'+(count!==1?'s':'')+'</span>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center">'
+      +'<span class="day-total">'+fmt(total)+'</span>'
+      +'<span class="day-chevron'+(isOpen?' open':'')+'" id="chev_'+uid+'">▼</span>'
+      +'</div>'
+      +'</div>'
+      +'<div class="day-cats" id="'+uid+'" style="'+(isOpen?'':'display:none')+'">'
+      +catsHtml
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+window.toggleDay=function(btn){
+  var uid=btn.getAttribute('data-uid');
+  var el=document.getElementById(uid);
+  var chev=document.getElementById('chev_'+uid);
+  if(!el) return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'';
+  if(chev) chev.className='day-chevron'+(open?'':' open');
+};
+
 function renderRecSidebar(rd){
+  var dc=document.getElementById('dailyCard');if(dc)dc.style.display='none';
   document.getElementById('sPayTitle').textContent='By Received Via';
   const vt={};rd.forEach(e=>{vt[e.via]=(vt[e.via]||0)+Number(e.amount);});
   document.getElementById('payBreakdown').innerHTML=Object.entries(RVIAS).map(([n,p])=>`<div class="pay-row"><div class="pay-badge"><div class="pay-dot" style="background:${p.c}"></div>${n}</div><div class="pay-amount">${fmt(vt[n]||0)}</div></div>`).join('');
@@ -1633,6 +1736,7 @@ function renderRecSidebar(rd){
 }
 
 function renderPeopleSidebar(){
+  var dc=document.getElementById('dailyCard');if(dc)dc.style.display='none';
   const bals=computeBalances();
   const totalOwed=Object.values(bals).filter(v=>v>0).reduce((s,v)=>s+v,0);
   const totalIOwe=Math.abs(Object.values(bals).filter(v=>v<0).reduce((s,v)=>s+v,0));
